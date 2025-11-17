@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/ghana-trotro-transit-admin-web/static/css/main.9ee51e9e.css",
+    "main.js": "/ghana-trotro-transit-admin-web/static/js/main.30e26e00.js",
+    "static/js/453.2e7858e6.chunk.js": "/ghana-trotro-transit-admin-web/static/js/453.2e7858e6.chunk.js",
+    "index.html": "/ghana-trotro-transit-admin-web/index.html",
+    "main.9ee51e9e.css.map": "/ghana-trotro-transit-admin-web/static/css/main.9ee51e9e.css.map",
+    "main.30e26e00.js.map": "/ghana-trotro-transit-admin-web/static/js/main.30e26e00.js.map",
+    "453.2e7858e6.chunk.js.map": "/ghana-trotro-transit-admin-web/static/js/453.2e7858e6.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.9ee51e9e.css",
+    "static/js/main.30e26e00.js"
+  ]
+}
