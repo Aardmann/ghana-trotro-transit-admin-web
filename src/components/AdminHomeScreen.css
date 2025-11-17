@@ -212,6 +212,26 @@ body {
   transition: all 0.2s;
 }
 
+.forgot-password-button {
+  background: none;
+  border: none;
+  color: #666;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 15px;
+  font-size: 14px;
+  padding: 5px;
+}
+
+.forgot-password-button:hover {
+  color: #333;
+}
+
+.forgot-password-button:disabled {
+  color: #999;
+  cursor: not-allowed;
+}
+
 .tab:hover {
   background: var(--border);
 }

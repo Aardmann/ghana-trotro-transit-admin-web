@@ -23,7 +23,8 @@ const AuthForm = ({
   onEmailChange, 
   onPasswordChange, 
   onLogin, 
-  isLoading 
+  isLoading,
+  onForgotPassword
 }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -66,6 +67,15 @@ const AuthForm = ({
           >
             {isLoading ? <div className="spinner"></div> : 'Sign In'}
           </button>
+
+          <button 
+  type="button"
+  onClick={onForgotPassword}
+  disabled={isLoading}
+  className="forgot-password-button"
+>
+  {isLoading ? 'Sending...' : 'Forgot Password?'}
+</button>
         </form>
       </div>
     </div>
@@ -660,7 +670,7 @@ const AdminHomeScreen = () => {
     }
   };
 
-  const handleAdminLogin = async () => {
+const handleAdminLogin = async () => {
   if (!authEmail || !authPassword) {
     alert('Please enter both email and password');
     return;
@@ -697,7 +707,64 @@ const AdminHomeScreen = () => {
     }
   } catch (error) {
     console.error('Login error:', error);
-    alert('Access denied. Admin privileges required.' ||error.message || 'Login failed');
+    alert(error.message || 'Login failed');
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+// Add this new function for password reset
+const handleForgotPassword = async () => {
+  if (!authEmail) {
+    alert('Please enter your email address to reset password');
+    return;
+  }
+
+  setIsLoading(true);
+  try {
+    // First, find the user by email from profiles table
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, role')
+      .eq('email', authEmail)
+      .single();
+
+    if (profileError) {
+      // No profile found with this email - show generic message
+      alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
+      return;
+    }
+
+    // Check if user has admin role
+    if (profile.role !== 'admin') {
+      // User exists but is not admin - show generic message
+      alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
+      return;
+    }
+
+    // User is admin - send reset email
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(authEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (resetError) {
+      // Handle specific reset errors while maintaining security
+      if (resetError.message.includes('Email not confirmed')) {
+        alert('Please check your email to confirm your account before resetting your password.');
+      } else {
+        throw resetError;
+      }
+      return;
+    }
+
+    // Success - show confirmation message
+    alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
+    
+  } catch (error) {
+    console.error('Password reset error:', error);
+    
+    // Show generic message for any unexpected errors
+    alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
   } finally {
     setIsLoading(false);
   }
@@ -1049,99 +1116,357 @@ const AdminHomeScreen = () => {
     setStopSuggestions({ start: [], destination: [] });
   };
 
-  const findRoutesBetweenStops = async (startName, destinationName) => {
-    try {
-      setIsLoading(true);
-      
-      // Find start and destination stops
-      const startStop = stops.find(stop => 
-        stop.name.toLowerCase().includes(startName.toLowerCase()) ||
-        startName.toLowerCase().includes(stop.name.toLowerCase())
-      );
-      
-      const destinationStop = stops.find(stop => 
-        stop.name.toLowerCase().includes(destinationName.toLowerCase()) ||
-        destinationName.toLowerCase().includes(stop.name.toLowerCase())
-      );
-
-      if (!startStop || !destinationStop) {
-        alert('Start or destination stop not found in database');
-        return;
-      }
-
-      if (startStop.id === destinationStop.id) {
-        alert('Start and destination cannot be the same stop');
-        return;
-      }
-
-      // Generate route options
-      const foundRoutes = generateRouteOptions(startStop, destinationStop, stops);
-      
-      if (foundRoutes.length === 0) {
-        alert('Could not generate routes between these stops. Please ensure you have enough stops in your database.');
-        return;
-      }
-
-      setFoundRoutes(foundRoutes);
-      setSelectedRoutes([]);
-      setShowRouteSelection(true);
-      setShowRouteFinder(false);
-
-    } catch (error) {
-      console.error('Error finding routes:', error);
-      alert('Failed to find routes: ' + error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const generateRouteOptions = (startStop, destinationStop, allStops) => {
-    const routes = [];
+  // UPDATED: Enhanced route finding algorithm with diverse route options
+const findRoutesBetweenStops = async (startName, destinationName) => {
+  try {
+    setIsLoading(true);
     
-    // Direct route
-    const directRoute = {
-      stops: [startStop, destinationStop],
-      totalDistance: calculateDistance(
-        startStop.latitude,
-        startStop.longitude,
-        destinationStop.latitude,
-        destinationStop.longitude
-      ).toFixed(2),
-      fares: [''],
-      type: 'direct'
-    };
-    routes.push(directRoute);
+    console.log('🔍 Finding routes between:', startName, 'and', destinationName);
+    console.log('📊 Total stops in database:', stops.length);
     
-    // Routes with 1 intermediate stop
-    const availableStops = allStops.filter(stop => 
-      stop.id !== startStop.id && stop.id !== destinationStop.id
+    // Find start and destination stops with exact or partial matching
+    const startStop = stops.find(stop => 
+      stop.name.toLowerCase().includes(startName.toLowerCase()) ||
+      startName.toLowerCase().includes(stop.name.toLowerCase())
     );
     
-    availableStops.slice(0, 3).forEach(intermediateStop => {
-      const distance1 = calculateDistance(
-        startStop.latitude,
-        startStop.longitude,
-        intermediateStop.latitude,
-        intermediateStop.longitude
-      );
-      const distance2 = calculateDistance(
-        intermediateStop.latitude,
-        intermediateStop.longitude,
-        destinationStop.latitude,
-        destinationStop.longitude
-      );
-      const totalDistance = (distance1 + distance2).toFixed(2);
+    const destinationStop = stops.find(stop => 
+      stop.name.toLowerCase().includes(destinationName.toLowerCase()) ||
+      destinationName.toLowerCase().includes(stop.name.toLowerCase())
+    );
+
+    console.log('📍 Found stops:', { startStop, destinationStop });
+
+    if (!startStop || !destinationStop) {
+      alert('Start or destination stop not found in database');
+      return;
+    }
+
+    if (startStop.id === destinationStop.id) {
+      alert('Start and destination cannot be the same stop');
+      return;
+    }
+
+    // Generate diverse route options
+    const foundRoutes = generateDiverseRouteOptions(startStop, destinationStop, stops);
+    
+    console.log('🛣️ Found routes:', foundRoutes.length);
+
+    if (foundRoutes.length === 0) {
+      alert('Could not generate routes between these stops. Please ensure you have enough stops in your database.');
+      return;
+    }
+
+    setFoundRoutes(foundRoutes);
+    setSelectedRoutes([]);
+    setShowRouteSelection(true);
+    setShowRouteFinder(false);
+
+  } catch (error) {
+    console.error('❌ Error finding routes:', error);
+    alert('Failed to find routes: ' + error.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+// NEW: Generate diverse route options including both shortest and alternative routes
+const generateDiverseRouteOptions = (startStop, destinationStop, allStops) => {
+  const routes = [];
+  
+  // Filter out start and destination stops for intermediate options
+  const availableStops = allStops.filter(stop => 
+    stop.id !== startStop.id && stop.id !== destinationStop.id
+  );
+  
+  console.log('🔄 Available intermediate stops:', availableStops.length);
+  
+  // Route generation helpers with different intermediate stop counts
+  const directRoute = createDirectRoute(startStop, destinationStop);
+  if (directRoute) routes.push(directRoute);
+  
+  const oneStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 1);
+  routes.push(...oneStopRoutes.slice(0, 20));
+  
+  const twoStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 2);
+  routes.push(...twoStopRoutes.slice(0, 20));
+  
+  const threeStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 3);
+  routes.push(...threeStopRoutes.slice(0, 20));
+
+  const fourStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 4);
+  routes.push(...fourStopRoutes.slice(0, 20));
+
+  const fiveStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 5);
+  routes.push(...fiveStopRoutes.slice(0, 15));
+
+  const sixStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 6);
+  routes.push(...sixStopRoutes.slice(0, 15));
+
+  const sevenStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 7);
+  routes.push(...sevenStopRoutes.slice(0, 10));
+
+  const eightStopRoutes = generateRoutesWithNStops(startStop, destinationStop, availableStops, 8);
+  routes.push(...eightStopRoutes.slice(0, 5));
+  
+  // Remove duplicates and sort by distance
+  const uniqueRoutes = removeDuplicateRoutes(routes);
+  
+  // Sort by distance and take top 20 routes for variety
+  const sortedRoutes = uniqueRoutes
+    .sort((a, b) => parseFloat(a.totalDistance) - parseFloat(b.totalDistance))
+    .slice(0, 80)
+    .map((route, index) => ({
+      ...route,
+      name: `${startStop.name} to ${destinationStop.name}`,
+      id: `found-route-${Date.now()}-${index}`
+    }));
+  
+  console.log('✅ Generated diverse routes:', sortedRoutes.length);
+  return sortedRoutes;
+};
+
+// NEW: Generate routes with exactly N intermediate stops
+const generateRoutesWithNStops = (startStop, destinationStop, availableStops, intermediateCount) => {
+  const routes = [];
+  
+  if (availableStops.length < intermediateCount) {
+    return routes;
+  }
+  
+  // Calculate direct distance for reference
+  const directDistance = calculateDistance(
+    startStop.latitude, startStop.longitude,
+    destinationStop.latitude, destinationStop.longitude
+  );
+  
+  // Get stops that are geographically reasonable
+  const reasonableStops = availableStops
+    .map(stop => ({
+      stop,
+      distanceToStart: calculateDistance(startStop.latitude, startStop.longitude, stop.latitude, stop.longitude),
+      distanceToDest: calculateDistance(stop.latitude, stop.longitude, destinationStop.latitude, destinationStop.longitude),
+      totalDetour: calculateDistance(startStop.latitude, startStop.longitude, stop.latitude, stop.longitude) +
+                   calculateDistance(stop.latitude, stop.longitude, destinationStop.latitude, destinationStop.longitude)
+    }))
+    // Include stops that create reasonable detours (not too far from direct path)
+    .filter(intermediate => intermediate.totalDetour < directDistance * 3) // Allow up to 3x detour
+    .sort((a, b) => a.totalDetour - b.totalDetour); // Sort by least detour first
+  
+  console.log(`📍 Reasonable stops for ${intermediateCount} intermediates:`, reasonableStops.length);
+  
+  // For 1 intermediate stop
+  if (intermediateCount === 1) {
+    // Take both shortest and some alternative routes
+    const shortestOptions = reasonableStops.slice(0, 10); // Top 8 shortest
+    const alternativeOptions = getAlternativeStops(reasonableStops, 6); // 4 alternative routes
+    
+    [...shortestOptions, ...alternativeOptions].forEach(({ stop }) => {
+      const routeStops = [startStop, stop, destinationStop];
+      const totalDistance = calculateRouteDistance(routeStops);
       
       routes.push({
-        stops: [startStop, intermediateStop, destinationStop],
-        totalDistance,
-        fares: ['', ''],
+        stops: routeStops,
+        totalDistance: totalDistance.toFixed(2),
+        fares: Array(routeStops.length - 1).fill(''),
         type: '1_intermediate'
       });
     });
+  }
+  
+  // For 2 intermediate stops
+  else if (intermediateCount === 2) {
+    const selectedRoutes = [];
     
-    return routes;
+    // Generate combinations of 2 stops from reasonable stops
+    for (let i = 0; i < Math.min(reasonableStops.length - 1, 10); i++) {
+      for (let j = i + 1; j < Math.min(reasonableStops.length, 15); j++) {
+        const stop1 = reasonableStops[i].stop;
+        const stop2 = reasonableStops[j].stop;
+        
+        // Try different orderings
+        const order1 = [startStop, stop1, stop2, destinationStop];
+        const order2 = [startStop, stop2, stop1, destinationStop];
+        
+        const distance1 = calculateRouteDistance(order1);
+        const distance2 = calculateRouteDistance(order2);
+        
+        // Take the better ordering
+        const bestOrder = distance1 <= distance2 ? order1 : order2;
+        const bestDistance = Math.min(distance1, distance2);
+        
+        selectedRoutes.push({
+          stops: bestOrder,
+          distance: bestDistance,
+          type: '2_intermediate'
+        });
+      }
+    }
+    
+    // Sort by distance and take diverse options
+    selectedRoutes.sort((a, b) => a.distance - b.distance);
+    
+    // Take shortest routes and some alternatives
+    const shortest = selectedRoutes.slice(0, 10);
+    const alternatives = getAlternativeRoutes(selectedRoutes, 10);
+    
+    [...shortest, ...alternatives].forEach(route => {
+      routes.push({
+        stops: route.stops,
+        totalDistance: route.distance.toFixed(2),
+        fares: Array(route.stops.length - 1).fill(''),
+        type: route.type
+      });
+    });
+  }
+  
+  // For 3+ intermediate stops
+  else if (intermediateCount >= 3) {
+    const selectedRoutes = [];
+    
+    // Generate combinations focusing on alternative paths
+    for (let i = 0; i < Math.min(reasonableStops.length - 2, 8); i++) {
+      for (let j = i + 1; j < Math.min(reasonableStops.length - 1, 12); j++) {
+        for (let k = j + 1; k < Math.min(reasonableStops.length, 15); k++) {
+          const stops = [reasonableStops[i].stop, reasonableStops[j].stop, reasonableStops[k].stop];
+          
+          // Generate different permutations for route diversity
+          const permutations = generateStopPermutations(startStop, destinationStop, stops);
+          
+          permutations.forEach(routeStops => {
+            const distance = calculateRouteDistance(routeStops);
+            
+            // Include routes that are alternative paths (not necessarily shortest)
+            if (distance < directDistance * 5) { // Allow longer alternative routes
+              selectedRoutes.push({
+                stops: routeStops,
+                distance: distance,
+                type: `${intermediateCount}_intermediate`
+              });
+            }
+          });
+        }
+      }
+    }
+    
+    // Sort and take diverse options
+    selectedRoutes.sort((a, b) => a.distance - b.distance);
+    
+    // Mix of shortest and alternative routes
+    const shortest = selectedRoutes.slice(0, 10);
+    const alternatives = getAlternativeRoutes(selectedRoutes, 10);
+    
+    [...shortest, ...alternatives].forEach(route => {
+      routes.push({
+        stops: route.stops,
+        totalDistance: route.distance.toFixed(2),
+        fares: Array(route.stops.length - 1).fill(''),
+        type: route.type
+      });
+    });
+  }
+  
+  return routes;
+};
+
+// NEW: Helper function to get alternative stops (not just the shortest)
+const getAlternativeStops = (stops, count) => {
+  if (stops.length <= count) return stops;
+  
+  // Take some from the middle and end of the sorted list for diversity
+  const alternativeIndices = [];
+  const step = Math.max(1, Math.floor(stops.length / count));
+  
+  for (let i = 0; i < count; i++) {
+    const index = Math.min(stops.length - 1, (i + 1) * step);
+    alternativeIndices.push(index);
+  }
+  
+  return alternativeIndices.map(index => stops[index]);
+};
+
+// NEW: Helper function to get alternative routes
+const getAlternativeRoutes = (routes, count) => {
+  if (routes.length <= count) return routes;
+  
+  const alternatives = [];
+  const step = Math.max(1, Math.floor(routes.length / count));
+  
+  for (let i = 0; i < count; i++) {
+    const index = Math.min(routes.length - 1, (i + 1) * step);
+    alternatives.push(routes[index]);
+  }
+  
+  return alternatives;
+};
+
+// NEW: Generate different stop permutations for route diversity
+const generateStopPermutations = (start, destination, intermediateStops) => {
+  const permutations = [];
+  
+  // Simple approach: try a few different orderings
+  if (intermediateStops.length === 3) {
+    const [a, b, c] = intermediateStops;
+    
+    // Different logical orderings
+    permutations.push(
+      [start, a, b, c, destination],
+      [start, a, c, b, destination],
+      [start, b, a, c, destination],
+      [start, c, a, b, destination]
+    );
+  }
+  
+  return permutations;
+};
+
+// NEW: Remove duplicate routes
+const removeDuplicateRoutes = (routes) => {
+  const seen = new Set();
+  const unique = [];
+  
+  routes.forEach(route => {
+    const key = route.stops.map(stop => stop.id).join('-');
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(route);
+    }
+  });
+  
+  return unique;
+};
+
+// Create direct route between two stops
+const createDirectRoute = (startStop, destinationStop) => {
+  const stops = [startStop, destinationStop];
+  const totalDistance = calculateDistance(
+    startStop.latitude,
+    startStop.longitude,
+    destinationStop.latitude,
+    destinationStop.longitude
+  );
+  
+  return {
+    stops,
+    totalDistance: totalDistance.toFixed(2),
+    fares: Array(stops.length - 1).fill(''),
+    type: 'direct'
   };
+};
+
+// Calculate total distance for a route
+const calculateRouteDistance = (stops) => {
+  let totalDistance = 0;
+  for (let i = 0; i < stops.length - 1; i++) {
+    totalDistance += calculateDistance(
+      stops[i].latitude,
+      stops[i].longitude,
+      stops[i + 1].latitude,
+      stops[i + 1].longitude
+    );
+  }
+  return totalDistance;
+};
 
   const handleRouteToggle = (routeIndex) => {
     setSelectedRoutes(prev => 
@@ -1232,19 +1557,6 @@ const AdminHomeScreen = () => {
     }
   };
 
-  const calculateRouteDistance = (stops) => {
-    let totalDistance = 0;
-    for (let i = 0; i < stops.length - 1; i++) {
-      totalDistance += calculateDistance(
-        stops[i].latitude,
-        stops[i].longitude,
-        stops[i + 1].latitude,
-        stops[i + 1].longitude
-      );
-    }
-    return totalDistance;
-  };
-
   const toggleBottomSheet = () => {
     setShowBottomSheet(!showBottomSheet);
     if (editingStop) {
@@ -1259,17 +1571,18 @@ const AdminHomeScreen = () => {
   };
 
   if (showAuth) {
-    return (
-      <AuthForm
-        authEmail={authEmail}
-        authPassword={authPassword}
-        onEmailChange={setAuthEmail}
-        onPasswordChange={setAuthPassword}
-        onLogin={handleAdminLogin}
-        isLoading={isLoading}
-      />
-    );
-  }
+  return (
+    <AuthForm
+      authEmail={authEmail}
+      authPassword={authPassword}
+      onEmailChange={setAuthEmail}
+      onPasswordChange={setAuthPassword}
+      onLogin={handleAdminLogin}
+      onForgotPassword={handleForgotPassword}
+      isLoading={isLoading}
+    />
+  );
+}
 
   return (
     <div className="container">
