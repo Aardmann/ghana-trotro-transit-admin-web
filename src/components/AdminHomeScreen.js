@@ -722,49 +722,19 @@ const handleForgotPassword = async () => {
 
   setIsLoading(true);
   try {
-    // First, find the user by email from profiles table
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, role')
-      .eq('email', authEmail)
-      .single();
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
+        redirectTo: 'https://ghanatrotrotransit.netlify.app/reset-password',
+      });
 
-    if (profileError) {
-      // No profile found with this email - show generic message
-      alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
-      return;
-    }
-
-    // Check if user has admin role
-    if (profile.role !== 'admin') {
-      // User exists but is not admin - show generic message
-      alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
-      return;
-    }
-
-    // User is admin - send reset email
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(authEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-
-    if (resetError) {
-      // Handle specific reset errors while maintaining security
-      if (resetError.message.includes('Email not confirmed')) {
-        alert('Please check your email to confirm your account before resetting your password.');
-      } else {
-        throw resetError;
-      }
-      return;
-    }
-
-    // Success - show confirmation message
-    alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
-    
+      if (error) throw error;
+      
+      alert(
+        'Password Reset Email Sent',
+        `Check ${authEmail} for the password reset link. The link will expire in 24 hours.`
+      );    
   } catch (error) {
-    console.error('Password reset error:', error);
-    
-    // Show generic message for any unexpected errors
-    alert('If this email is registered as an admin, you will receive a password reset link shortly. Please check your inbox.');
+    console.error('Unexpected error:', error);
+    alert('An unexpected error occurred. Please try again.');
   } finally {
     setIsLoading(false);
   }
