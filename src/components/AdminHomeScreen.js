@@ -1,4 +1,3 @@
-// src/components/AdminHomeScreen.js
 import React, { useState, useEffect } from 'react';
 import './AdminHomeScreen.css';
 import MapComponent from './MapComponent';
@@ -14,8 +13,31 @@ import {
   Settings,
   Route,
   ArrowLeft,
-  Check
+  Check,
+  Plus,
+  Filter,
+  Download
 } from 'lucide-react';
+
+// Ghana regions
+const GHANA_REGIONS = [
+  { name: 'Greater Accra', dataQuality: 'Excellent' },
+  { name: 'Ashanti', dataQuality: 'Good' },
+  { name: 'Western', dataQuality: 'Good' },
+  { name: 'Central', dataQuality: 'Fair' },
+  { name: 'Eastern', dataQuality: 'Fair' },
+  { name: 'Volta', dataQuality: 'Fair' },
+  { name: 'Northern', dataQuality: 'Limited' },
+  { name: 'Upper East', dataQuality: 'Limited' },
+  { name: 'Upper West', dataQuality: 'Limited' },
+  { name: 'Brong-Ahafo', dataQuality: 'Fair' },
+  { name: 'Western North', dataQuality: 'Limited' },
+  { name: 'Oti', dataQuality: 'Limited' },
+  { name: 'Ahafo', dataQuality: 'Limited' },
+  { name: 'Bono East', dataQuality: 'Limited' },
+  { name: 'Savannah', dataQuality: 'Limited' },
+  { name: 'North East', dataQuality: 'Limited' }
+];
 
 const AuthForm = ({ 
   authEmail, 
@@ -89,10 +111,21 @@ const StopForm = ({
   onAddStop, 
   onCancel, 
   isLoading,
+  onOpenAutoFinder
 }) => {
   return (
     <div className="form-container">
       <h2 className="form-title">Add New Stop</h2>
+      
+      <button 
+        className="auto-finder-button"
+        onClick={onOpenAutoFinder}
+      >
+        <Search size={20} />
+        Find Stops Automatically
+      </button>
+      
+      <p className="divider-text">OR</p>
       
       <div className="input-group">
         <input
@@ -462,6 +495,165 @@ const RouteSelectionModal = ({
   );
 };
 
+const AutomaticStopFinder = ({
+  selectedRegion,
+  onRegionChange,
+  foundStops,
+  selectedStops,
+  onStopToggle,
+  onStopRename,
+  onSaveStops,
+  onCancel,
+  isLoading,
+  onFindStops,
+  onStopPreview,
+  onSelectAll,
+  onDeselectAll
+}) => {
+  const allSelected = foundStops.length > 0 && selectedStops.length === foundStops.length;
+  const someSelected = selectedStops.length > 0 && !allSelected;
+
+  return (
+    <div className="form-container">
+      <div className="finder-header">
+        <h2 className="form-title">Automatic Stop Finder</h2>
+        <p className="form-subtitle">Find bus stops, stations, taxi ranks, and junctions in Ghana</p>
+      </div>
+      
+      <div className="input-group">
+        <label className="input-label">Select Region</label>
+        <select
+          className="region-select"
+          value={selectedRegion}
+          onChange={(e) => onRegionChange(e.target.value)}
+        >
+          <option value="">Select a region (Greater Accra has best data)</option>
+          {GHANA_REGIONS.map(region => (
+            <option key={region.name} value={region.name}>
+              {region.name} ({region.dataQuality} data)
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="finder-controls">
+        <button 
+          className={`find-button ${isLoading ? 'find-button-disabled' : ''}`}
+          onClick={onFindStops}
+          disabled={isLoading || !selectedRegion}
+        >
+          {isLoading ? <div className="spinner"></div> : 'Find Stops Automatically'}
+        </button>
+        
+        {foundStops.length > 0 && (
+          <div className="results-info">
+            <span className="results-count">Found {foundStops.length} stops</span>
+            <span className="selected-count">{selectedStops.length} selected</span>
+          </div>
+        )}
+      </div>
+
+      {foundStops.length > 0 && (
+        <div className="found-stops-container">
+          <div className="selection-controls">
+            <h3 className="sub-section-title">Found Stops</h3>
+            <div className="bulk-actions">
+              {!allSelected ? (
+                <button 
+                  className="select-all-button"
+                  onClick={onSelectAll}
+                >
+                  <Check size={16} />
+                  Select All
+                </button>
+              ) : (
+                <button 
+                  className="deselect-all-button"
+                  onClick={onDeselectAll}
+                >
+                  <X size={16} />
+                  Deselect All
+                </button>
+              )}
+              {someSelected && (
+                <span className="partial-selection">
+                  {selectedStops.length} of {foundStops.length} selected
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <p className="info-text">
+            Click on stops to preview location on map. Green markers show bus/taxi icons found.
+          </p>
+          
+          <div className="found-stops-list">
+            {foundStops.map((stop, index) => (
+              <div key={stop.id} className={`found-stop-item ${selectedStops.includes(index) ? 'selected' : ''}`}>
+                <button
+                  className="stop-checkbox"
+                  onClick={() => onStopToggle(index)}
+                >
+                  <div className={`checkbox ${selectedStops.includes(index) ? 'checkbox-selected' : ''}`}>
+                    {selectedStops.includes(index) && (
+                      <Check size={16} color="#FFFFFF" />
+                    )}
+                  </div>
+                </button>
+                
+                <div className="stop-details">
+                  <input
+                    className="stop-name-input"
+                    value={stop.name}
+                    onChange={(e) => onStopRename(index, e.target.value)}
+                    placeholder="Enter stop name"
+                  />
+                  <div className="stop-coordinates">
+                    Lat: {stop.latitude.toFixed(6)}, Lng: {stop.longitude.toFixed(6)}
+                  </div>
+                  <div className="stop-type">
+                    <span className={`type-badge type-${stop.type.toLowerCase().replace(' ', '-')}`}>
+                      {stop.type}
+                    </span>
+                    {stop.source === 'amenity' && (
+                      <span className="icon-badge">🚍 Icon Found</span>
+                    )}
+                  </div>
+                </div>
+                
+                <button
+                  className="preview-button"
+                  onClick={() => onStopPreview(stop)}
+                >
+                  <MapPin size={16} />
+                  View
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="button-row">
+            <button 
+              className="cancel-button"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+            
+            <button 
+              className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
+              onClick={onSaveStops}
+              disabled={isLoading || selectedStops.length === 0}
+            >
+              {isLoading ? <div className="spinner"></div> : `Save ${selectedStops.length} Stops`}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminHomeScreen = () => {
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(true);
@@ -473,6 +665,14 @@ const AdminHomeScreen = () => {
   const [isSelectingLocation, setIsSelectingLocation] = useState(false);
   const [newStop, setNewStop] = useState({ name: '', latitude: null, longitude: null });
   
+
+  const [showAutoStopFinder, setShowAutoStopFinder] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [foundStops, setFoundStops] = useState([]);
+  const [selectedFoundStops, setSelectedFoundStops] = useState([]);
+  const [previewStop, setPreviewStop] = useState(null);
+
+
   // Bottom sheet state
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [activeSection, setActiveSection] = useState('stops');
@@ -512,6 +712,18 @@ const AdminHomeScreen = () => {
     start: [],
     destination: []
   });
+
+
+   const [panToLocation, setPanToLocation] = useState(null);
+
+   const handleStopPreview = (stop) => {
+    setPreviewStop(stop);
+    // Pan to the stop location
+    setPanToLocation({
+      lat: stop.latitude,
+      lng: stop.longitude
+    });
+  };
 
   // Check authentication on component mount
   useEffect(() => {
@@ -573,6 +785,483 @@ const AdminHomeScreen = () => {
       calculateEditRouteDistances();
     }
   }, [editRouteData.stops, editingRoute]);
+
+const handleFindStopsAutomatically = async () => {
+  if (!selectedRegion) {
+    alert('Please select a region');
+    return;
+  }
+
+  setIsLoading(true);
+  setFoundStops([]);
+  
+  try {
+    console.log('Starting comprehensive transport location search for:', selectedRegion);
+    
+    // Use both Overpass and Nominatim for comprehensive results
+    const [overpassStops, nominatimStops] = await Promise.allSettled([
+      findStopsUsingOverpassAPI(selectedRegion),
+      findStopsUsingNominatim(selectedRegion)
+    ]);
+
+    let allStops = [];
+    
+    if (overpassStops.status === 'fulfilled') {
+      console.log('Overpass results:', overpassStops.value.length);
+      allStops = [...allStops, ...overpassStops.value];
+    }
+    
+    if (nominatimStops.status === 'fulfilled') {
+      console.log('Nominatim results:', nominatimStops.value.length);
+      allStops = [...allStops, ...nominatimStops.value];
+    }
+
+    console.log('Total combined results before filtering:', allStops.length);
+
+    // Remove duplicates based on coordinates and name similarity
+    const uniqueStops = allStops.filter((stop, index, self) => {
+      const firstIndex = self.findIndex(s => 
+        Math.abs(s.latitude - stop.latitude) < 0.001 &&
+        Math.abs(s.longitude - stop.longitude) < 0.001
+      );
+      return index === firstIndex;
+    });
+
+    console.log('Unique stops after deduplication:', uniqueStops.length);
+
+    // Filter out stops that might already exist in database
+    const filteredStops = uniqueStops.filter(foundStop => {
+      return !stops.some(existingStop => 
+        Math.abs(existingStop.latitude - foundStop.latitude) < 0.001 &&
+        Math.abs(existingStop.longitude - foundStop.longitude) < 0.001
+      );
+    }).slice(0, 100); // Limit to 100 stops
+
+    console.log('Final stops after database filtering:', filteredStops.length);
+
+    if (filteredStops.length === 0) {
+      if (allStops.length > 0) {
+        alert('All found transport locations already exist in your database. Try a different region.');
+      } else {
+        alert('No transport locations found in this region. This might be because:\n\n• Limited OpenStreetMap data for this region\n• Try "Greater Accra" which has better data\n• Check your internet connection\n• The search might need more specific location names');
+      }
+      return;
+    }
+
+    setFoundStops(filteredStops);
+    setSelectedFoundStops([]);
+
+  } catch (error) {
+    console.error('Error in automatic stop finding:', error);
+    alert('Search failed: ' + error.message + '\n\nTrying fallback data...');
+    
+    // Fallback to comprehensive mock data
+    setSelectedFoundStops([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const handleSelectAllStops = () => {
+  setSelectedFoundStops(Array.from({ length: foundStops.length }, (_, i) => i));
+};
+
+const handleDeselectAllStops = () => {
+  setSelectedFoundStops([]);
+};
+
+
+const findStopsUsingOverpassAPI = async (region) => {
+  try {
+    // Expanded region bounding boxes for Ghana (wider coverage)
+    const regionBounds = {
+      'Greater Accra': [5.333, -0.537, 5.873, 0.163],
+      'Ashanti': [6.433, -2.017, 7.133, -1.217],
+      'Western': [4.733, -3.017, 5.933, -1.817],
+      'Central': [4.933, -1.517, 5.633, -0.617],
+      'Eastern': [5.833, -0.717, 6.833, 0.083],
+      'Volta': [5.633, 0.033, 7.333, 1.183],
+      'Northern': [8.333, -2.517, 10.533, -0.317],
+      'Upper East': [10.433, -3.017, 11.333, -0.217],
+      'Upper West': [9.633, -3.117, 10.633, -1.817],
+      'Brong-Ahafo': [6.933, -3.017, 8.533, -1.217],
+      'Western North': [5.733, -3.017, 6.833, -2.117],
+      'Oti': [7.333, 0.033, 8.533, 0.983],
+      'Ahafo': [6.633, -2.617, 7.433, -1.817],
+      'Bono East': [7.233, -2.017, 8.333, -0.617],
+      'Savannah': [8.333, -2.517, 9.833, -1.217],
+      'North East': [9.633, -2.017, 10.633, -0.617]
+    };
+
+    const bounds = regionBounds[region] || [5.333, -0.537, 5.873, 0.163];
+    const [south, west, north, east] = bounds;
+
+    console.log('Searching for locations with specific name endings in region:', region);
+
+    // Enhanced query to search for names ending with specific terms
+    const overpassQuery = `
+      [out:json][timeout:35];
+      (
+        // Search for nodes with names ending with specific terms
+        node["name"~".*(?i)(bus stop|bus station|taxi rank|taxi station|trotro station|trotro stop|junction|traffic light|traffic|first|second|market|night market|roundabout|market station|terminal|stc|vip|hospital|station|police station|post office|gate)$"](${south},${west},${north},${east});
+        
+        // Search for ways with names ending with specific terms
+        way["name"~".*(?i)(bus stop|bus station|taxi rank|taxi station|trotro station|trotro stop|junction|traffic light|traffic|first|second|market|night market|roundabout|market station|terminal|stc|vip|hospital|station|police station|post office|gate)$"](${south},${west},${north},${east});
+        
+        // Search for amenities that are transport-related (ICONS) - even without names
+        node["amenity"~"bus_station|taxi|ferry_terminal"](${south},${west},${north},${east});
+        way["amenity"~"bus_station|taxi|ferry_terminal"](${south},${west},${north},${east});
+        
+        // Search for public transport nodes (ICONS)
+        node["public_transport"~"station|stop_position|platform"](${south},${west},${north},${east});
+        way["public_transport"~"station|stop_position|platform"](${south},${west},${north},${east});
+        
+        // Search for highway bus stops (ICONS)
+        node["highway"="bus_stop"](${south},${west},${north},${east});
+        
+        // Search for specific amenities
+        node["amenity"~"hospital|police|post_office"](${south},${west},${north},${east});
+        way["amenity"~"hospital|police|post_office"](${south},${west},${north},${east});
+        
+        // Search for traffic infrastructure
+        node["highway"="traffic_signals"](${south},${west},${north},${east});
+        node["highway"="crossing"](${south},${west},${north},${east});
+        node["highway"="stop"](${south},${west},${north},${east});
+        node["highway"="give_way"](${south},${west},${north},${east});
+        
+        // Search for roundabouts
+        node["junction"="roundabout"](${south},${west},${north},${east});
+        way["junction"="roundabout"](${south},${west},${north},${east});
+      );
+      out center;
+      >;
+      out skel qt;
+    `;
+
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: `data=${encodeURIComponent(overpassQuery)}`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Overpass API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Raw API response elements:', data.elements);
+
+    // Process the results
+    const stops = data.elements
+      .filter(element => {
+        // Include elements with coordinates
+        const hasCoords = element.lat && element.lon || 
+                         (element.center && element.center.lat && element.center.lon);
+        return hasCoords;
+      })
+      .map((element, index) => {
+        // Get coordinates
+        let lat, lon;
+        if (element.lat && element.lon) {
+          lat = element.lat;
+          lon = element.lon;
+        } else if (element.center) {
+          lat = element.center.lat;
+          lon = element.center.lon;
+        } else if (element.bounds) {
+          lat = (element.bounds.minlat + element.bounds.maxlat) / 2;
+          lon = (element.bounds.minlon + element.bounds.maxlon) / 2;
+        }
+
+        // Generate name based on available information
+        let name = 'Unnamed Location';
+        let stopType = 'Location';
+        let source = 'overpass';
+        
+        if (element.tags && element.tags.name) {
+          name = element.tags.name;
+          
+          // Determine type based on name ending
+          const lowerName = name.toLowerCase();
+          
+          if (lowerName.endsWith('bus station')) stopType = 'Bus Station';
+          else if (lowerName.endsWith('bus stop')) stopType = 'Bus Stop';
+          else if (lowerName.endsWith('taxi rank') || lowerName.endsWith('taxi station')) stopType = 'Taxi Station';
+          else if (lowerName.endsWith('trotro station') || lowerName.endsWith('trotro stop')) stopType = 'Trotro Station';
+          else if (lowerName.endsWith('junction')) stopType = 'Junction';
+          else if (lowerName.endsWith('traffic light')) stopType = 'Traffic Light';
+          else if (lowerName.endsWith('traffic')) stopType = 'Traffic Point';
+          else if (lowerName.endsWith('first')) stopType = 'First Stop';
+          else if (lowerName.endsWith('second')) stopType = 'Second Stop';
+          else if (lowerName.endsWith('market') || lowerName.endsWith('night market')) stopType = 'Market';
+          else if (lowerName.endsWith('roundabout')) stopType = 'Roundabout';
+          else if (lowerName.endsWith('market station')) stopType = 'Market Station';
+          else if (lowerName.endsWith('terminal')) stopType = 'Terminal';
+          else if (lowerName.endsWith('stc')) stopType = 'STC Station';
+          else if (lowerName.endsWith('vip')) stopType = 'VIP Station';
+          else if (lowerName.endsWith('hospital')) stopType = 'Hospital';
+          else if (lowerName.endsWith('station')) stopType = 'Station';
+          else if (lowerName.endsWith('police station')) stopType = 'Police Station';
+          else if (lowerName.endsWith('post office')) stopType = 'Post Office';
+          else if (lowerName.endsWith('gate')) stopType = 'Gate';
+          
+        } else {
+          // Create descriptive name for amenities without names
+          if (element.tags) {
+            if (element.tags.amenity === 'bus_station') {
+              name = 'Bus Station';
+              stopType = 'Bus Station';
+              source = 'amenity';
+            } else if (element.tags.amenity === 'taxi') {
+              name = 'Taxi Stand';
+              stopType = 'Taxi Station';
+              source = 'amenity';
+            } else if (element.tags.public_transport) {
+              name = `Public Transport ${element.tags.public_transport}`;
+              stopType = 'Public Transport';
+              source = 'amenity';
+            } else if (element.tags.highway === 'bus_stop') {
+              name = 'Bus Stop';
+              stopType = 'Bus Stop';
+              source = 'amenity';
+            } else if (element.tags.amenity === 'ferry_terminal') {
+              name = 'Ferry Terminal';
+              stopType = 'Ferry Terminal';
+              source = 'amenity';
+            } else if (element.tags.highway === 'traffic_signals') {
+              name = 'Traffic Light';
+              stopType = 'Traffic Light';
+              source = 'amenity';
+            } else if (element.tags.highway === 'crossing') {
+              name = 'Pedestrian Crossing';
+              stopType = 'Crossing';
+              source = 'amenity';
+            } else if (element.tags.highway === 'stop') {
+              name = 'Stop Sign';
+              stopType = 'Stop Sign';
+              source = 'amenity';
+            } else if (element.tags.highway === 'give_way') {
+              name = 'Give Way';
+              stopType = 'Traffic Sign';
+              source = 'amenity';
+            } else if (element.tags.junction === 'roundabout') {
+              name = 'Roundabout';
+              stopType = 'Roundabout';
+              source = 'amenity';
+            } else if (element.tags.amenity === 'hospital') {
+              name = 'Hospital';
+              stopType = 'Hospital';
+              source = 'amenity';
+            } else if (element.tags.amenity === 'police') {
+              name = 'Police Station';
+              stopType = 'Police Station';
+              source = 'amenity';
+            } else if (element.tags.amenity === 'post_office') {
+              name = 'Post Office';
+              stopType = 'Post Office';
+              source = 'amenity';
+            }
+          }
+        }
+
+        // If type not determined by name ending, use tags
+        if (stopType === 'Location' && element.tags) {
+          if (element.tags.amenity === 'bus_station') stopType = 'Bus Station';
+          else if (element.tags.amenity === 'taxi') stopType = 'Taxi Station';
+          else if (element.tags.highway === 'bus_stop') stopType = 'Bus Stop';
+          else if (element.tags.public_transport) stopType = 'Public Transport';
+          else if (element.tags.highway === 'traffic_signals') stopType = 'Traffic Light';
+          else if (element.tags.junction === 'roundabout') stopType = 'Roundabout';
+          else if (element.tags.amenity === 'hospital') stopType = 'Hospital';
+          else if (element.tags.amenity === 'police') stopType = 'Police Station';
+          else if (element.tags.amenity === 'post_office') stopType = 'Post Office';
+        }
+
+        return {
+          id: `found-stop-${element.id || Date.now()}-${index}`,
+          name: name,
+          latitude: lat,
+          longitude: lon,
+          type: stopType,
+          tags: element.tags || {},
+          osm_id: element.id,
+          element_type: element.type,
+          source: source
+        };
+      })
+      .filter(stop => stop.latitude && stop.longitude)
+      .slice(0, 200); // Increased limit for wider search
+
+    console.log(`Found ${stops.length} locations in ${region} (including ${stops.filter(s => s.source === 'amenity').length} amenities)`);
+    return stops;
+
+  } catch (error) {
+    console.error('Overpass API error:', error);
+    throw new Error(`Failed to fetch locations: ${error.message}`);
+  }
+};
+
+const findStopsUsingNominatim = async (region) => {
+  try {
+    console.log('Searching Nominatim for locations with specific name endings in:', region);
+    
+    // Enhanced search terms including all specified endings
+    const searchTerms = [
+      'bus stop',
+      'bus station', 
+      'taxi rank',
+      'taxi station',
+      'trotro station',
+      'motor park',
+      'transport station',
+      'lorry station',
+      'junction',
+      'traffic light',
+      'traffic',
+      'first',
+      'second',
+      'market',
+      'night market',
+      'roundabout',
+      'market station',
+      'terminal',
+      'stc',
+      'vip',
+      'hospital',
+      'station',
+      'police station',
+      'post office',
+      'gate'
+    ];
+
+    let allResults = [];
+    
+    // Search for each term
+    for (const term of searchTerms) {
+      const query = `${term} ${region} Ghana`;
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=25&countrycodes=gh`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`Found ${data.length} results for "${term}"`);
+          
+          const transportResults = data.map((item, index) => {
+            // Determine type based on search term and display name
+            let stopType = 'Location';
+            const lowerName = item.display_name.toLowerCase();
+            
+            // Check name endings for type determination
+            if (term.endsWith('bus station') || lowerName.endsWith('bus station')) stopType = 'Bus Station';
+            else if (term.endsWith('bus stop') || lowerName.endsWith('bus stop')) stopType = 'Bus Stop';
+            else if (term.endsWith('taxi rank') || term.endsWith('taxi station') || lowerName.endsWith('taxi rank') || lowerName.endsWith('taxi station')) stopType = 'Taxi Station';
+            else if (term.endsWith('trotro station') || lowerName.endsWith('trotro station')) stopType = 'Trotro Station';
+            else if (term.endsWith('junction') || lowerName.endsWith('junction')) stopType = 'Junction';
+            else if (term.endsWith('traffic light') || lowerName.endsWith('traffic light')) stopType = 'Traffic Light';
+            else if (term.endsWith('traffic') || lowerName.endsWith('traffic')) stopType = 'Traffic Point';
+            else if (term.endsWith('first') || lowerName.endsWith('first')) stopType = 'First Stop';
+            else if (term.endsWith('second') || lowerName.endsWith('second')) stopType = 'Second Stop';
+            else if (term.endsWith('market') || term.endsWith('night market') || lowerName.endsWith('market') || lowerName.endsWith('night market')) stopType = 'Market';
+            else if (term.endsWith('roundabout') || lowerName.endsWith('roundabout')) stopType = 'Roundabout';
+            else if (term.endsWith('market station') || lowerName.endsWith('market station')) stopType = 'Market Station';
+            else if (term.endsWith('terminal') || lowerName.endsWith('terminal')) stopType = 'Terminal';
+            else if (term.endsWith('stc') || lowerName.endsWith('stc')) stopType = 'STC Station';
+            else if (term.endsWith('vip') || lowerName.endsWith('vip')) stopType = 'VIP Station';
+            else if (term.endsWith('hospital') || lowerName.endsWith('hospital')) stopType = 'Hospital';
+            else if (term.endsWith('station') || lowerName.endsWith('station')) stopType = 'Station';
+            else if (term.endsWith('police station') || lowerName.endsWith('police station')) stopType = 'Police Station';
+            else if (term.endsWith('post office') || lowerName.endsWith('post office')) stopType = 'Post Office';
+            else if (term.endsWith('gate') || lowerName.endsWith('gate')) stopType = 'Gate';
+
+            return {
+              id: `nominatim-${item.place_id}-${index}`,
+              name: item.display_name.split(',')[0] || `${stopType} ${index + 1}`,
+              latitude: parseFloat(item.lat),
+              longitude: parseFloat(item.lon),
+              type: stopType,
+              source: 'nominatim',
+              full_name: item.display_name
+            };
+          });
+          
+          allResults = [...allResults, ...transportResults];
+        }
+        
+        // Small delay to be respectful to the API
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+      } catch (termError) {
+        console.error(`Error searching for "${term}":`, termError);
+      }
+    }
+
+    console.log(`Total Nominatim results: ${allResults.length}`);
+    return allResults;
+
+  } catch (error) {
+    console.error('Nominatim API error:', error);
+    return [];
+  }
+};
+
+  const handleFoundStopToggle = (stopIndex) => {
+    setSelectedFoundStops(prev => 
+      prev.includes(stopIndex)
+        ? prev.filter(idx => idx !== stopIndex)
+        : [...prev, stopIndex]
+    );
+  };
+
+  const handleFoundStopRename = (stopIndex, newName) => {
+    setFoundStops(prev => {
+      const updated = [...prev];
+      updated[stopIndex] = { ...updated[stopIndex], name: newName };
+      return updated;
+    });
+  };
+
+  const handleSaveFoundStops = async () => {
+    if (selectedFoundStops.length === 0) {
+      alert('Please select at least one stop');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const stopsToSave = selectedFoundStops.map(index => foundStops[index]);
+      
+      const { data, error } = await supabase
+        .from('stops')
+        .insert(
+          stopsToSave.map(stop => ({
+            name: stop.name,
+            latitude: stop.latitude,
+            longitude: stop.longitude
+          }))
+        )
+        .select();
+
+      if (error) throw error;
+      
+      alert(`${stopsToSave.length} stops added successfully!`);
+      setFoundStops([]);
+      setSelectedFoundStops([]);
+      setShowAutoStopFinder(false);
+      loadStops();
+    } catch (error) {
+      console.error('Error saving stops:', error);
+      alert('Failed to save stops: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+
 
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -1557,13 +2246,15 @@ const calculateRouteDistance = (stops) => {
   return (
     <div className="container">
       <div className="map-container">
-        <MapComponent 
-          center={MAP_CONFIG.center}
-          stops={stops}
-          selectedStop={editingStop || (newStop.latitude ? newStop : null)}
-          onMapPress={handleMapPress}
-          isSelectingLocation={isSelectingLocation}
-        />
+          <MapComponent 
+            center={MAP_CONFIG.center}
+            stops={stops}
+            selectedStop={editingStop || (newStop.latitude ? newStop : null)}
+            previewStop={previewStop} 
+            panToLocation={panToLocation} 
+            onMapPress={handleMapPress}
+            isSelectingLocation={isSelectingLocation}
+          />
       </div>
 
       <div className="header-buttons">
@@ -1578,37 +2269,65 @@ const calculateRouteDistance = (stops) => {
       {showBottomSheet && (
         <div className={`bottom-sheet ${showBottomSheet ? 'slide-in' : 'slide-out'}`}>
           <div className="bottom-sheet-header">
-            <div className="tab-container">
-              <button 
-                className={`tab ${activeSection === 'stops' ? 'active-tab' : ''}`}
-                onClick={() => {
-                  setActiveSection('stops');
-                  setShowRouteFinder(false);
-                }}
-              >
-                <MapPin size={16} />
-                Stops
-              </button>
-              <button 
-                className={`tab ${activeSection === 'routes' ? 'active-tab' : ''}`}
-                onClick={() => {
-                  setActiveSection('routes');
-                  setShowRouteFinder(false);
-                }}
-              >
-                <Route size={16} />
-                Routes
+            <div className="user-info-header">
+              <div className="user-welcome">
+                Welcome, <span className="user-email">{user?.email}</span>
+              </div>
+              <div className="tab-container">
+                <button 
+                  className={`tab ${activeSection === 'stops' ? 'active-tab' : ''}`}
+                  onClick={() => {
+                    setActiveSection('stops');
+                    setShowRouteFinder(false);
+                    setShowAutoStopFinder(false);
+                  }}
+                >
+                  <MapPin size={16} />
+                  Stops
+                </button>
+                <button 
+                  className={`tab ${activeSection === 'routes' ? 'active-tab' : ''}`}
+                  onClick={() => {
+                    setActiveSection('routes');
+                    setShowRouteFinder(false);
+                    setShowAutoStopFinder(false);
+                  }}
+                >
+                  <Route size={16} />
+                  Routes
+                </button>
+              </div>
+              <button className="close-button" onClick={toggleBottomSheet}>
+                <X size={20} />
               </button>
             </div>
-            <button className="close-button" onClick={toggleBottomSheet}>
-              <X size={20} />
-            </button>
           </div>
 
           <div className="bottom-sheet-content">
             {activeSection === 'stops' && (
               <div className="management-container">
-                {editingStop ? (
+                { showAutoStopFinder ? (
+                <AutomaticStopFinder
+                  selectedRegion={selectedRegion}
+                  onRegionChange={setSelectedRegion}
+                  foundStops={foundStops}
+                  selectedStops={selectedFoundStops}
+                  onStopToggle={handleFoundStopToggle}
+                  onStopRename={handleFoundStopRename}
+                  onSaveStops={handleSaveFoundStops}
+                  onCancel={() => {
+                    setShowAutoStopFinder(false);
+                    setFoundStops([]);
+                    setSelectedFoundStops([]);
+                  }}
+                  isLoading={isLoading}
+                  onFindStops={handleFindStopsAutomatically}
+                  onStopPreview={handleStopPreview}
+                  onSelectAll={handleSelectAllStops}
+                  onDeselectAll={handleDeselectAllStops}
+                />
+              )
+                : editingStop ? (
                   <div className="form-container">
                     <h2 className="form-title">Edit Stop</h2>
                     
@@ -1660,6 +2379,7 @@ const calculateRouteDistance = (stops) => {
                     onAddStop={handleAddStop}
                     onCancel={() => setNewStop({ name: '', latitude: null, longitude: null })}
                     isLoading={isLoading}
+                    onOpenAutoFinder={() => setShowAutoStopFinder(true)}
                   />
                 )}
 

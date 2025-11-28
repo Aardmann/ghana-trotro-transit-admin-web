@@ -1,6 +1,6 @@
 // src/components/MapComponent.js
 import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -13,8 +13,10 @@ L.Icon.Default.mergeOptions({
 });
 
 // Custom icons
-const createCustomIcon = (color = '#6b21a8', isSelected = false) => {
-  const size = isSelected ? 24 : 20;
+const createCustomIcon = (color = '#6b21a8', isSelected = false, isPreview = false) => {
+  const size = isSelected || isPreview ? 24 : 20;
+  const emoji = isPreview ? '👁️' : (isSelected ? '📍' : '');
+  
   return L.divIcon({
     className: 'custom-marker',
     html: `<div style="
@@ -29,8 +31,8 @@ const createCustomIcon = (color = '#6b21a8', isSelected = false) => {
       justify-content: center;
       color: white;
       font-weight: bold;
-      font-size: ${isSelected ? '12px' : '10px'};
-    ">${isSelected ? '📍' : ''}</div>`,
+      font-size: ${isSelected || isPreview ? '12px' : '10px'};
+    ">${emoji}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -47,12 +49,26 @@ function MapEvents({ onMapPress, isSelectingLocation }) {
   return null;
 }
 
+function MapPanController({ center, zoom }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (center && center.lat && center.lng) {
+      map.setView([center.lat, center.lng], zoom || map.getZoom());
+    }
+  }, [center, zoom, map]);
+
+  return null;
+}
+
 const MapComponent = ({ 
   center, 
   stops = [], 
   selectedStop = null,
+  previewStop = null,
   onMapPress = null,
-  isSelectingLocation = false 
+  isSelectingLocation = false,
+  panToLocation = null 
 }) => {
   const mapRef = useRef();
 
@@ -87,6 +103,13 @@ const MapComponent = ({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        <MapPanController center={panToLocation} zoom={16} />
+        
+        <MapEvents 
+          onMapPress={onMapPress} 
+          isSelectingLocation={isSelectingLocation} 
+        />
         
         <MapEvents 
           onMapPress={onMapPress} 
@@ -94,7 +117,7 @@ const MapComponent = ({
         />
         
         {/* Render stops */}
-        {stops.map((stop, index) => (
+        {stops.map((stop) => (
           <Marker
             key={stop.id}
             position={[stop.latitude, stop.longitude]}
@@ -125,6 +148,28 @@ const MapComponent = ({
             </Popup>
           </Marker>
         )}
+        
+        {/* Render preview stop */}
+        {previewStop && (
+        <Marker
+          position={[previewStop.latitude, previewStop.longitude]}
+          icon={createCustomIcon(
+            previewStop.source === 'amenity' ? '#10B981' : '#3B82F6', 
+            false, 
+            true
+          )}
+          >
+          <Popup>
+            <div>
+              <b>Preview: {previewStop.name}</b><br />
+              Type: {previewStop.type}<br />
+              {previewStop.source === 'amenity' && <span>🚍 Found by icon<br /></span>}
+              Lat: {previewStop.latitude.toFixed(6)}<br />
+              Lng: {previewStop.longitude.toFixed(6)}
+            </div>
+          </Popup>
+        </Marker> 
+)}
       </MapContainer>
     </div>
   );

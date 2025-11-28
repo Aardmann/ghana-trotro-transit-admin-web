@@ -1057,3 +1057,365 @@ body {
 .save-button:disabled:hover {
   transform: none;
 }
+
+
+/* Automatic Stop Finder Styles */
+.auto-finder-button {
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #10B981, #059669);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auto-finder-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.finder-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.region-select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  margin-bottom: 16px;
+}
+
+.region-select:focus {
+  outline: none;
+  border-color: #6b21a8;
+}
+
+.find-button {
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #6b21a8, #7c3aed);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.find-button-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.finder-controls {
+  margin-bottom: 20px;
+}
+
+.results-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #F3F4F6;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.results-count {
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.selected-count {
+  color: #10B981;
+  font-weight: 600;
+}
+
+.found-stops-container {
+  margin-top: 20px;
+}
+
+.info-text {
+  color: #6B7280;
+  font-size: 14px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.found-stops-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.found-stop-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.found-stop-item:hover {
+  border-color: #6b21a8;
+}
+
+.stop-checkbox {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.stop-details {
+  flex: 1;
+}
+
+.stop-name-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.stop-name-input:focus {
+  outline: none;
+  border-color: #6b21a8;
+}
+
+.stop-coordinates {
+  font-size: 12px;
+  color: #6B7280;
+  margin-bottom: 2px;
+}
+
+.stop-type {
+  font-size: 12px;
+  color: #10B981;
+  font-weight: 500;
+}
+
+.preview-button {
+  padding: 6px 12px;
+  background: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preview-button:hover {
+  background: #2563EB;
+}
+.user-welcome {
+  font-size: 14px;
+  color: #6B7280;
+}
+
+.user-email {
+  font-weight: 600;
+  color: #1F2937;
+}
+
+/* Add to AdminHomeScreen.css */
+.user-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #F8FAFC;
+  border-bottom: 1px solid #E5E7EB;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Selection Controls */
+.selection-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.select-all-button, .deselect-all-button {
+  padding: 8px 16px;
+  border: 2px solid #10B981;
+  background: white;
+  color: #10B981;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.select-all-button:hover {
+  background: #10B981;
+  color: white;
+}
+
+.deselect-all-button {
+  border-color: #EF4444;
+  color: #EF4444;
+}
+
+.deselect-all-button:hover {
+  background: #EF4444;
+  color: white;
+}
+
+.partial-selection {
+  font-size: 14px;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+/* Stop item selection state */
+.found-stop-item.selected {
+  border-color: #10B981;
+  background: #F0FDF4;
+}
+
+/* Type badges */
+.type-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.type-bus-station {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.type-bus-stop {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.type-taxi-station {
+  background: #E0E7FF;
+  color: #3730A3;
+}
+
+.type-junction {
+  background: #F3E8FF;
+  color: #6B21A8;
+}
+
+.type-trotro-station {
+  background: #FCE7F3;
+  color: #9D174D;
+}
+
+.type-motor-park, .type-lorry-station {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.type-public-transport {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.icon-badge {
+  padding: 2px 6px;
+  background: #10B981;
+  color: white;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+/* Stop type display */
+.stop-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* Add to existing type badges */
+.type-first-stop, .type-second-stop {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.type-market, .type-market-station {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.type-roundabout {
+  background: #E0E7FF;
+  color: #3730A3;
+}
+
+.type-terminal {
+  background: #F3E8FF;
+  color: #6B21A8;
+}
+
+.type-stc-station, .type-vip-station {
+  background: #FCE7F3;
+  color: #9D174D;
+}
+
+.type-hospital {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.type-police-station {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.type-post-office {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.type-gate {
+  background: #E0E7FF;
+  color: #3730A3;
+}
