@@ -21,22 +21,22 @@ import {
 
 // Ghana regions
 const GHANA_REGIONS = [
-  { name: 'Greater Accra', dataQuality: 'Excellent' },
-  { name: 'Ashanti', dataQuality: 'Good' },
-  { name: 'Western', dataQuality: 'Good' },
-  { name: 'Central', dataQuality: 'Fair' },
-  { name: 'Eastern', dataQuality: 'Fair' },
-  { name: 'Volta', dataQuality: 'Fair' },
-  { name: 'Northern', dataQuality: 'Limited' },
-  { name: 'Upper East', dataQuality: 'Limited' },
-  { name: 'Upper West', dataQuality: 'Limited' },
-  { name: 'Brong-Ahafo', dataQuality: 'Fair' },
-  { name: 'Western North', dataQuality: 'Limited' },
-  { name: 'Oti', dataQuality: 'Limited' },
-  { name: 'Ahafo', dataQuality: 'Limited' },
-  { name: 'Bono East', dataQuality: 'Limited' },
-  { name: 'Savannah', dataQuality: 'Limited' },
-  { name: 'North East', dataQuality: 'Limited' }
+  { name: 'Greater Accra' },
+  { name: 'Ashanti' },
+  { name: 'Western' },
+  { name: 'Central' },
+  { name: 'Eastern'},
+  { name: 'Volta' },
+  { name: 'Northern' },
+  { name: 'Upper East' },
+  { name: 'Upper West'},
+  { name: 'Brong-Ahafo' },
+  { name: 'Western North' },
+  { name: 'Oti'},
+  { name: 'Ahafo' },
+  { name: 'Bono East' },
+  { name: 'Savannah' },
+  { name: 'North East'}
 ];
 
 const AuthForm = ({ 
@@ -527,10 +527,10 @@ const AutomaticStopFinder = ({
           value={selectedRegion}
           onChange={(e) => onRegionChange(e.target.value)}
         >
-          <option value="">Select a region (Greater Accra has best data)</option>
+          <option value="">Select a region</option>
           {GHANA_REGIONS.map(region => (
             <option key={region.name} value={region.name}>
-              {region.name} ({region.dataQuality} data)
+              {region.name}
             </option>
           ))}
         </select>
