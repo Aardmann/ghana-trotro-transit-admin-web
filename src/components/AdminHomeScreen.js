@@ -714,7 +714,88 @@ const AdminHomeScreen = () => {
   });
 
 
-   const [panToLocation, setPanToLocation] = useState(null);
+  const [panToLocation, setPanToLocation] = useState(null);
+  const [searchLocationQuery, setSearchLocationQuery] = useState('');
+  const [searchLocationResults, setSearchLocationResults] = useState([]);
+  const [searchedLocation, setSearchedLocation] = useState(null);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+
+
+  // Location search functions
+const handleSearchLocation = async (query) => {
+  if (!query.trim()) {
+    setSearchLocationResults([]);
+    setSearchedLocation(null);
+    return;
+  }
+
+  setIsSearchingLocation(true);
+  try {
+    // Search using Nominatim (OpenStreetMap)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=gh`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Location search results:', data);
+      
+      const results = data.map((item, index) => ({
+        id: `search-${item.place_id}-${index}`,
+        name: item.display_name,
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+        type: 'Searched Location',
+        source: 'search',
+        importance: item.importance,
+        place_id: item.place_id
+      }));
+      
+      setSearchLocationResults(results);
+    } else {
+      setSearchLocationResults([]);
+    }
+  } catch (error) {
+    console.error('Location search error:', error);
+    setSearchLocationResults([]);
+  } finally {
+    setIsSearchingLocation(false);
+  }
+};
+
+const handleLocationResultSelect = (location) => {
+  setSearchedLocation(location);
+  setSearchLocationQuery(location.name.split(',')[0]); // Show short name in input
+  setSearchLocationResults([]);
+  
+  // Pan to the selected location
+  setPanToLocation({
+    lat: location.latitude,
+    lng: location.longitude
+  });
+};
+
+const handleAddSearchedLocation = () => {
+  if (!searchedLocation) {
+    alert('Please search and select a location first');
+    return;
+  }
+
+  // Pre-fill the new stop form with searched location
+  setNewStop({
+    name: searchedLocation.name.split(',')[0], // Use short name
+    latitude: searchedLocation.latitude,
+    longitude: searchedLocation.longitude
+  });
+  
+  // Clear search
+  setSearchedLocation(null);
+  setSearchLocationQuery('');
+  setSearchLocationResults([]);
+  
+  // Show success message
+  alert('Location added to stop form! Please review the name and click "Save Stop" to add it to the database.');
+};
 
    const handleStopPreview = (stop) => {
     setPreviewStop(stop);
@@ -2249,6 +2330,7 @@ const calculateRouteDistance = (stops) => {
           <MapComponent 
             center={MAP_CONFIG.center}
             stops={stops}
+            searchedLocation={searchedLocation}
             selectedStop={editingStop || (newStop.latitude ? newStop : null)}
             previewStop={previewStop} 
             panToLocation={panToLocation} 
@@ -2306,6 +2388,95 @@ const calculateRouteDistance = (stops) => {
           <div className="bottom-sheet-content">
             {activeSection === 'stops' && (
               <div className="management-container">
+              <div className="search-location-container">
+            <h3 className="sub-section-title">Search Locations on Map</h3>
+            <p className="info-text">
+              Search for any location in Ghana. Results will show on the map and can be added as stops.
+            </p>
+            
+            <div className="search-location-input-container">
+              <div className="search-container">
+                <Search size={20} color="#6b7280" />
+                <input
+                  className="search-input"
+                  placeholder="Search for any location in Ghana (e.g., 'Circle', 'Madina Market', '37 Hospital')"
+                  value={searchLocationQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchLocationQuery(value);
+                    
+                    // Clear any existing timeout
+                    if (window.searchLocationTimeout) {
+                      clearTimeout(window.searchLocationTimeout);
+                    }
+                    
+                    // Set new timeout for debounced search
+                    window.searchLocationTimeout = setTimeout(() => {
+                      if (value.trim()) {
+                        handleSearchLocation(value);
+                      } else {
+                        setSearchLocationResults([]);
+                      }
+                    }, 500);
+                  }}
+                  onFocus={() => {
+                    if (searchLocationQuery && searchLocationResults.length === 0) {
+                      handleSearchLocation(searchLocationQuery);
+                    }
+                  }}
+                />
+                {isSearchingLocation && (
+                  <div className="spinner-small"></div>
+                )}
+              </div>
+
+              {searchLocationResults.length > 0 && (
+                <div className="search-results-container">
+                  {searchLocationResults.map((location) => (
+                    <button
+                      key={location.id}
+                      className="search-result-item"
+                      onClick={() => handleLocationResultSelect(location)}
+                    >
+                      <MapPin size={16} color="#6b21a8" />
+                      <div className="search-result-info">
+                        <span className="search-result-name">
+                          {location.name.split(',')[0]}
+                        </span>
+                        <span className="search-result-fullname">
+                          {location.name.length > 60 
+                            ? location.name.substring(0, 60) + '...' 
+                            : location.name
+                          }
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {searchedLocation && (
+                <div className="selected-location-container">
+                  <div className="selected-location-info">
+                    <h4 className="selected-location-name">
+                      {searchedLocation.name.split(',')[0]}
+                    </h4>
+                    <p className="selected-location-coordinates">
+                      Lat: {searchedLocation.latitude.toFixed(6)}, Lng: {searchedLocation.longitude.toFixed(6)}
+                    </p>
+                  </div>
+                  <button 
+                    className="add-location-button"
+                    onClick={handleAddSearchedLocation}
+                  >
+                    <Plus size={16} />
+                    Add to Stops
+                  </button>
+                </div>
+              )}
+            </div>
+              </div>
+
                 { showAutoStopFinder ? (
                 <AutomaticStopFinder
                   selectedRegion={selectedRegion}

@@ -66,9 +66,10 @@ const MapComponent = ({
   stops = [], 
   selectedStop = null,
   previewStop = null,
+  searchedLocation = null, // Add this prop with default value
+  panToLocation = null,
   onMapPress = null,
-  isSelectingLocation = false,
-  panToLocation = null 
+  isSelectingLocation = false
 }) => {
   const mapRef = useRef();
 
@@ -103,13 +104,9 @@ const MapComponent = ({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
-        <MapPanController center={panToLocation} zoom={16} />
         
-        <MapEvents 
-          onMapPress={onMapPress} 
-          isSelectingLocation={isSelectingLocation} 
-        />
+        {/* Add the pan controller */}
+        <MapPanController center={panToLocation} zoom={16} />
         
         <MapEvents 
           onMapPress={onMapPress} 
@@ -151,25 +148,42 @@ const MapComponent = ({
         
         {/* Render preview stop */}
         {previewStop && (
-        <Marker
-          position={[previewStop.latitude, previewStop.longitude]}
-          icon={createCustomIcon(
-            previewStop.source === 'amenity' ? '#10B981' : '#3B82F6', 
-            false, 
-            true
-          )}
+          <Marker
+            position={[previewStop.latitude, previewStop.longitude]}
+            icon={createCustomIcon(
+              previewStop.source === 'amenity' ? '#10B981' : '#3B82F6', 
+              false, 
+              true
+            )}
           >
-          <Popup>
-            <div>
-              <b>Preview: {previewStop.name}</b><br />
-              Type: {previewStop.type}<br />
-              {previewStop.source === 'amenity' && <span>🚍 Found by icon<br /></span>}
-              Lat: {previewStop.latitude.toFixed(6)}<br />
-              Lng: {previewStop.longitude.toFixed(6)}
-            </div>
-          </Popup>
-        </Marker> 
-)}
+            <Popup>
+              <div>
+                <b>Preview: {previewStop.name}</b><br />
+                Type: {previewStop.type}<br />
+                {previewStop.source === 'amenity' && <span>🚍 Found by icon<br /></span>}
+                Lat: {previewStop.latitude.toFixed(6)}<br />
+                Lng: {previewStop.longitude.toFixed(6)}
+              </div>
+            </Popup>
+          </Marker>
+        )}
+        
+        {/* Render searched location */}
+        {searchedLocation && (
+          <Marker
+            position={[searchedLocation.latitude, searchedLocation.longitude]}
+            icon={createCustomIcon('#F59E0B', false, true)} // Amber color for searched locations
+          >
+            <Popup>
+              <div>
+                <b>Searched: {searchedLocation.name.split(',')[0]}</b><br />
+                Full: {searchedLocation.name}<br />
+                Lat: {searchedLocation.latitude.toFixed(6)}<br />
+                Lng: {searchedLocation.longitude.toFixed(6)}
+              </div>
+            </Popup>
+          </Marker>
+        )}
       </MapContainer>
     </div>
   );
