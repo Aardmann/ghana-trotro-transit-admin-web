@@ -274,7 +274,14 @@ const RouteForm = ({
   onAddRoute,
   onCancel,
   onOpenRouteFinder,
-  isLoading
+  isLoading,
+  // New props for enhanced finder
+  routeFinderConfig,
+  onRouteFinderConfigChange,
+  onAddStopCount,
+  onRemoveStopCount,
+  selectedRegion,
+  onRegionChange
 }) => {
   return (
     <div className="form-container">
@@ -299,6 +306,7 @@ const RouteForm = ({
         />
       </div>
       
+      {/* Rest of the existing RouteForm component */}
       <h3 className="sub-section-title">Add Stops to Route</h3>
       
       <div className="search-container">
@@ -393,34 +401,75 @@ const RouteSelectionModal = ({
   onFareChange,
   onSaveRoutes,
   onCancel,
-  isLoading
+  isLoading,
+  onAddReverseRoute,
+  onCloseReverseRoute // NEW: Close reverse route handler
 }) => {
   if (!visible) return null;
 
   const getRouteTypeLabel = (type) => {
     switch (type) {
-      case 'direct': return 'Direct Route';
-      case '1_intermediate': return '1 Stop Route';
-      default: return 'Standard Route';
+      case 'direct': 
+      case 'direct_with_station':
+        return 'Direct Route';
+      case '1_intermediate': 
+      case '1_intermediate_with_station':
+        return '1 Stop Route';
+      case '2_intermediate': 
+      case '2_intermediate_with_station':
+        return '2 Stop Route';
+      case '3_intermediate': 
+      case '3_intermediate_with_station':
+        return '3 Stop Route';
+      default: 
+        if (type.includes('direct')) return 'Direct Route';
+        if (type.includes('intermediate')) {
+          const count = type.match(/\d+/)?.[0] || 'Unknown';
+          return `${count} Stop Route`;
+        }
+        return 'Standard Route';
     }
+  };
+
+  const hasStations = (type) => {
+    return type.includes('_with_station');
   };
 
   return (
     <div className="modal-overlay">
-      <div className="modal-container">
-        <div className="modal-header">
+      <div className="modal-container large-modal">
+        <div className="modal-header sticky-header">
           <button className="back-button" onClick={onCancel}>
             <ArrowLeft size={24} />
           </button>
-          <h2 className="modal-title">Select Routes</h2>
+          <h2 className="modal-title">Select Routes ({foundRoutes.length} found)</h2>
           <div style={{ width: 24 }} />
         </div>
 
-        <div className="modal-content">
-          <h3 className="section-title">
-            Found {foundRoutes.length} Route(s)
-          </h3>
-          
+        {/* Fixed Action Buttons */}
+        <div className="modal-actions-sticky">
+          <div className="selected-count">
+            {selectedRoutes.length} route(s) selected
+          </div>
+          <div className="sticky-buttons">
+            <button 
+              className="cancel-button"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+            
+            <button 
+              className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
+              onClick={onSaveRoutes}
+              disabled={isLoading || selectedRoutes.length === 0}
+            >
+              {isLoading ? <div className="spinner"></div> : `Save ${selectedRoutes.length}`}
+            </button>
+          </div>
+        </div>
+
+        <div className="modal-content-with-sticky">
           {foundRoutes.map((route, index) => (
             <div key={route.id || index} className="route-option-container">
               <button
@@ -435,6 +484,15 @@ const RouteSelectionModal = ({
                 <div className="route-header-info">
                   <span className="route-option-title">
                     Route {index + 1} • {route.totalDistance} km
+                    {hasStations(route.type) && (
+                      <span className="route-type-with-station">🚍 Station</span>
+                    )}
+                    {route.isDuplicate && (
+                      <span className="duplicate-badge">⚠️ Duplicate</span>
+                    )}
+                    {route.hasSubRoutes && (
+                      <span className="subroute-badge">🔗 Sub-routes</span>
+                    )}
                   </span>
                   <span className="route-type">
                     {getRouteTypeLabel(route.type)} • {route.stops.length - 2} intermediate stops
@@ -444,7 +502,28 @@ const RouteSelectionModal = ({
               
               {selectedRoutes.includes(index) && (
                 <div className="fare-section">
-                  <span className="fare-section-title">Set Fares:</span>
+                  <div className="fare-section-header">
+                    <span className="fare-section-title">Set Fares:</span>
+                    <div className="fare-section-actions">
+                      {!route.reverseRoute ? (
+                        <button
+                          className="reverse-route-button"
+                          onClick={() => onAddReverseRoute(index)}
+                        >
+                          <Route size={16} />
+                          Add Reverse Route
+                        </button>
+                      ) : (
+                        <button
+                          className="close-reverse-route-button"
+                          onClick={() => onCloseReverseRoute(index)}
+                        >
+                          <X size={16} />
+                          Remove Reverse
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   {route.stops.map((stop, stopIndex) => (
                     stopIndex < route.stops.length - 1 && (
                       <div key={stopIndex} className="fare-input-row">
@@ -462,6 +541,38 @@ const RouteSelectionModal = ({
                       </div>
                     )
                   ))}
+                  
+                  {/* Reverse Route Section */}
+                  {route.reverseRoute && (
+                    <div className="reverse-route-section">
+                      <div className="reverse-route-header">
+                        <h4 className="reverse-route-title">Reverse Route</h4>
+                        <button
+                          className="close-reverse-button"
+                          onClick={() => onCloseReverseRoute(index)}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {route.reverseRoute.stops.map((stop, stopIndex) => (
+                        stopIndex < route.reverseRoute.stops.length - 1 && (
+                          <div key={stopIndex} className="fare-input-row reverse">
+                            <span className="fare-label">
+                              {stop.name} → {route.reverseRoute.stops[stopIndex + 1].name}
+                            </span>
+                            <input
+                              className="fare-input-small"
+                              placeholder="GH₵ 0.00"
+                              value={route.reverseRoute.fares[stopIndex]}
+                              onChange={(e) => onFareChange(index, stopIndex, e.target.value, true)}
+                              type="number"
+                              step="0.01"
+                            />
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -470,30 +581,13 @@ const RouteSelectionModal = ({
               </span>
             </div>
           ))}
-          
-          {foundRoutes.length > 0 && (
-            <div className="button-row">
-              <button 
-                className="cancel-button"
-                onClick={onCancel}
-              >
-                Cancel
-              </button>
-              
-              <button 
-                className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
-                onClick={onSaveRoutes}
-                disabled={isLoading || selectedRoutes.length === 0}
-              >
-                {isLoading ? <div className="spinner"></div> : `Save (${selectedRoutes.length}) Routes`}
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 };
+
+
 
 const AutomaticStopFinder = ({
   selectedRegion,
@@ -530,7 +624,7 @@ const AutomaticStopFinder = ({
           <option value="">Select a region</option>
           {GHANA_REGIONS.map(region => (
             <option key={region.name} value={region.name}>
-              {region.name}
+              {region.name} ({region.dataQuality} data)
             </option>
           ))}
         </select>
@@ -654,6 +748,363 @@ const AutomaticStopFinder = ({
   );
 };
 
+const EnhancedRouteFinder = ({
+  startPoints,
+  destinationPoints,
+  onStartPointChange,
+  onDestinationPointChange,
+  onAddStartPoint,
+  onAddDestinationPoint,
+  onRemoveStartPoint,
+  onRemoveDestinationPoint,
+  onFindRoutes,
+  onFindAutomaticRoutes,
+  onCancel,
+  isLoading,
+  stopSuggestions,
+  onStopSuggestionSelect,
+  routeConfig,
+  onRouteConfigChange,
+  onAddStopCount,
+  onRemoveStopCount,
+  selectedRegion,
+  onRegionChange,
+  automaticMode,
+  onToggleAutomaticMode
+}) => {
+  return (
+    <div className="form-container">
+      <h2 className="form-title">Auto Route Finder</h2>
+      
+      {/* Mode Toggle */}
+      <div className="mode-toggle">
+        <button
+          className={`mode-button ${!automaticMode ? 'mode-active' : ''}`}
+          onClick={() => onToggleAutomaticMode(false)}
+        >
+          <MapPin size={16} />
+          Manual Search
+        </button>
+        <button
+          className={`mode-button ${automaticMode ? 'mode-active' : ''}`}
+          onClick={() => onToggleAutomaticMode(true)}
+        >
+          <Route size={16} />
+          Automatic Discovery
+        </button>
+      </div>
+
+      {!automaticMode ? (
+        /* Manual Search Mode */
+        <>
+          <p className="form-subtitle">Find routes between multiple start and destination points</p>
+          
+          {/* Region Selection */}
+          <div className="input-group">
+            <label className="input-label">Search Region</label>
+            <select
+              className="region-select"
+              value={selectedRegion}
+              onChange={(e) => onRegionChange(e.target.value)}
+            >
+              <option value="">All Regions</option>
+              {GHANA_REGIONS.map(region => (
+                <option key={region.name} value={region.name}>
+                  {region.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Multiple Start Points */}
+          <div className="multiple-points-section">
+            <div className="points-header">
+              <label className="input-label">Start Points</label>
+              <button 
+                className="add-point-button"
+                onClick={onAddStartPoint}
+                type="button"
+              >
+                <Plus size={16} />
+                Add Start Point
+              </button>
+            </div>
+            
+            {startPoints.map((point, index) => (
+              <div key={index} className="point-input-group">
+                <div className="search-container">
+                  <MapPin size={20} color="#6b21a8" />
+                  <input
+                    className="search-input"
+                    placeholder={`Start Point ${index + 1} (e.g., 'Circle')`}
+                    value={point}
+                    onChange={(e) => onStartPointChange(e.target.value, index)}
+                  />
+                  {startPoints.length > 1 && (
+                    <button
+                      className="remove-point-button"
+                      onClick={() => onRemoveStartPoint(index)}
+                      type="button"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+                
+                {stopSuggestions.start[index]?.length > 0 && (
+                  <div className="suggestions-container">
+                    {stopSuggestions.start[index].map((stop) => (
+                      <button
+                        key={stop.id}
+                        className="suggestion-item"
+                        onClick={() => onStopSuggestionSelect(stop.name, 'start', index)}
+                      >
+                        <MapPin size={16} color="#6b21a8" />
+                        <span className="suggestion-text">{stop.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Multiple Destination Points */}
+          <div className="multiple-points-section">
+            <div className="points-header">
+              <label className="input-label">Destination Points</label>
+              <button 
+                className="add-point-button"
+                onClick={onAddDestinationPoint}
+                type="button"
+              >
+                <Plus size={16} />
+                Add Destination
+              </button>
+            </div>
+            
+            {destinationPoints.map((point, index) => (
+              <div key={index} className="point-input-group">
+                <div className="search-container">
+                  <MapPin size={20} color="#EF4444" />
+                  <input
+                    className="search-input"
+                    placeholder={`Destination Point ${index + 1} (e.g., 'Madina')`}
+                    value={point}
+                    onChange={(e) => onDestinationPointChange(e.target.value, index)}
+                  />
+                  {destinationPoints.length > 1 && (
+                    <button
+                      className="remove-point-button"
+                      onClick={() => onRemoveDestinationPoint(index)}
+                      type="button"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+
+                {stopSuggestions.destination[index]?.length > 0 && (
+                  <div className="suggestions-container">
+                    {stopSuggestions.destination[index].map((stop) => (
+                      <button
+                        key={stop.id}
+                        className="suggestion-item"
+                        onClick={() => onStopSuggestionSelect(stop.name, 'destination', index)}
+                      >
+                        <MapPin size={16} color="#EF4444" />
+                        <span className="suggestion-text">{stop.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        /* Automatic Discovery Mode */
+        <>
+          <p className="form-subtitle">Automatically discover routes based on your parameters</p>
+          
+          <div className="auto-info-card">
+            <div className="auto-info-icon">
+              <Route size={24} color="#10b981" />
+            </div>
+            <div className="auto-info-content">
+              <h4 className="auto-info-title">Automatic Route Discovery</h4>
+              <p className="auto-info-text">
+                The system will automatically generate routes between popular stops in the selected region 
+                based on your configuration below. No need to specify start and end points!
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Route Configuration */}
+      <div className="config-section">
+        <h3 className="sub-section-title">Route Configuration</h3>
+        
+        <div className="config-grid">
+          <div className="config-item">
+            <label className="config-label">Max Routes to Find</label>
+            <select
+              className="config-select"
+              value={routeConfig.maxRoutes}
+              onChange={(e) => onRouteConfigChange('maxRoutes', parseInt(e.target.value))}
+            >
+              <option value={20}>20 Routes</option>
+              <option value={50}>50 Routes</option>
+              <option value={100}>100 Routes</option>
+            </select>
+          </div>
+          
+          <div className="config-item">
+            <label className="config-label">Include Station Routes</label>
+            <div className="checkbox-container">
+              <input
+                type="checkbox"
+                checked={routeConfig.includeStations}
+                onChange={(e) => onRouteConfigChange('includeStations', e.target.checked)}
+                className="checkbox-input"
+              />
+              <span className="checkbox-label">Find routes with stations</span>
+            </div>
+          </div>
+
+          <div className="config-item">
+            <label className="config-label">Route Diversity</label>
+            <select
+              className="config-select"
+              value={routeConfig.diversity}
+              onChange={(e) => onRouteConfigChange('diversity', e.target.value)}
+            >
+              <option value="balanced">Balanced</option>
+              <option value="shortest">Prioritize Shortest</option>
+              <option value="alternative">Prioritize Alternative</option>
+              <option value="stations">Prioritize Stations</option>
+              <option value="random">Randomized</option>
+            </select>
+          </div>
+
+          <div className="config-item">
+            <label className="config-label">Min Route Distance</label>
+            <select
+              className="config-select"
+              value={routeConfig.minDistance}
+              onChange={(e) => onRouteConfigChange('minDistance', parseFloat(e.target.value))}
+            >
+              <option value={0}>Any Distance</option>
+              <option value={2}>2+ km</option>
+              <option value={5}>5+ km</option>
+              <option value={10}>10+ km</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Stop Count Configuration */}
+        <div className="stop-count-section">
+          <label className="config-label">Find Routes With These Stop Counts:</label>
+          <div className="stop-counts-container">
+            {routeConfig.stopCounts.map((count, index) => (
+              <div key={index} className="stop-count-item">
+                <span className="stop-count-text">
+                  {count === 0 ? 'Direct' : `${count} stops`}
+                </span>
+                <button
+                  className="remove-stop-count"
+                  onClick={() => onRemoveStopCount(index)}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          
+          <div className="add-stop-count">
+            <select
+              className="stop-count-select"
+              value={routeConfig.newStopCount}
+              onChange={(e) => onRouteConfigChange('newStopCount', parseInt(e.target.value))}
+            >
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(count => (
+                <option key={count} value={count}>
+                  {count === 0 ? 'Direct routes' : `${count} stops`}
+                </option>
+              ))}
+            </select>
+            <button
+              className="add-stop-count-button"
+              onClick={onAddStopCount}
+            >
+              <Plus size={16} />
+              Add
+            </button>
+          </div>
+        </div>
+
+        {/* Region Selection for Automatic Mode */}
+        {automaticMode && (
+          <div className="input-group">
+            <label className="input-label">Target Region for Discovery</label>
+            <select
+              className="region-select"
+              value={selectedRegion}
+              onChange={(e) => onRegionChange(e.target.value)}
+            >
+              <option value="">All Regions</option>
+              {GHANA_REGIONS.map(region => (
+                <option key={region.name} value={region.name}>
+                  {region.name}
+                </option>
+              ))}
+            </select>
+            <p className="input-help">
+              Routes will be discovered between popular stops in this region
+            </p>
+          </div>
+        )}
+      </div>
+      
+      <div className="button-row">
+        <button 
+          className="cancel-button"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        
+        {automaticMode ? (
+          <button 
+            className={`auto-discovery-button ${isLoading ? 'save-button-disabled' : ''}`}
+            onClick={onFindAutomaticRoutes}
+            disabled={isLoading}
+          >
+            {isLoading ? <div className="spinner"></div> : (
+              <>
+                <Route size={20} />
+                Discover Routes Automatically
+              </>
+            )}
+          </button>
+        ) : (
+          <button 
+            className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
+            onClick={onFindRoutes}
+            disabled={isLoading || startPoints.length === 0 || destinationPoints.length === 0}
+          >
+            {isLoading ? <div className="spinner"></div> : 'Find Routes'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+
+
 const AdminHomeScreen = () => {
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(true);
@@ -709,9 +1160,25 @@ const AdminHomeScreen = () => {
   const [selectedRoutes, setSelectedRoutes] = useState([]);
   const [showRouteSelection, setShowRouteSelection] = useState(false);
   const [stopSuggestions, setStopSuggestions] = useState({
-    start: [],
-    destination: []
+    start: [[]],
+    destination: [[]]
   });
+   const [showEnhancedRouteFinder, setShowEnhancedRouteFinder] = useState(false);
+  const [automaticMode, setAutomaticMode] = useState(false);
+  const [startPoints, setStartPoints] = useState(['']); // NEW: Multiple start points
+  const [destinationPoints, setDestinationPoints] = useState(['']); // NEW: Multiple destination points
+  const [routeFinderConfig, setRouteFinderConfig] = useState({
+    maxRoutes: 100,
+    includeStations: true,
+    stopCounts: [0, 1, 2, 3],
+    newStopCount: 0,
+    diversity: 'balanced',
+    minDistance: 0,
+    excludeExisting: true // NEW: Exclude existing routes
+  });
+  const [routeFinderRegion, setRouteFinderRegion] = useState('');
+  const [usedRoutePairs, setUsedRoutePairs] = useState(new Set());
+
 
 
   const [panToLocation, setPanToLocation] = useState(null);
@@ -719,6 +1186,41 @@ const AdminHomeScreen = () => {
   const [searchLocationResults, setSearchLocationResults] = useState([]);
   const [searchedLocation, setSearchedLocation] = useState(null);
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+
+
+const handleAddStartPoint = () => {
+    setStartPoints(prev => [...prev, '']);
+  };
+
+  const handleRemoveStartPoint = (index) => {
+    if (startPoints.length > 1) {
+      setStartPoints(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleAddDestinationPoint = () => {
+    setDestinationPoints(prev => [...prev, '']);
+  };
+
+  const handleRemoveDestinationPoint = (index) => {
+    if (destinationPoints.length > 1) {
+      setDestinationPoints(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleStartPointChange = (text, index) => {
+    const newStartPoints = [...startPoints];
+    newStartPoints[index] = text;
+    setStartPoints(newStartPoints);
+    handleStopSearch(text, 'start', index);
+  };
+
+  const handleDestinationPointChange = (text, index) => {
+    const newDestinationPoints = [...destinationPoints];
+    newDestinationPoints[index] = text;
+    setDestinationPoints(newDestinationPoints);
+    handleStopSearch(text, 'destination', index);
+  };
 
 
   // Location search functions
@@ -866,6 +1368,14 @@ const handleAddSearchedLocation = () => {
       calculateEditRouteDistances();
     }
   }, [editRouteData.stops, editingRoute]);
+
+  useEffect(() => {
+    // Initialize suggestions arrays to match the number of points
+    setStopSuggestions(prev => ({
+      start: Array(startPoints.length).fill().map((_, i) => prev.start[i] || []),
+      destination: Array(destinationPoints.length).fill().map((_, i) => prev.destination[i] || [])
+    }));
+  }, [startPoints.length, destinationPoints.length]);
 
 const handleFindStopsAutomatically = async () => {
   if (!selectedRegion) {
@@ -1341,9 +1851,6 @@ const findStopsUsingNominatim = async (region) => {
     }
   };
 
-
-
-
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Earth's radius in kilometers
@@ -1727,6 +2234,916 @@ const handleForgotPassword = async () => {
     });
   };
 
+ const findEnhancedRoutesBetweenStops = async () => {
+    try {
+      setIsLoading(true);
+      
+      console.log('🔍 Finding enhanced routes with multiple points');
+      console.log('📊 Start points:', startPoints);
+      console.log('📊 Destination points:', destinationPoints);
+      
+      const allRoutes = [];
+      
+      // Generate routes for all combinations of start and destination points
+      for (const startName of startPoints.filter(name => name.trim())) {
+        for (const destinationName of destinationPoints.filter(name => name.trim())) {
+          // Find start and destination stops
+          const startStop = stops.find(stop => 
+            stop.name.toLowerCase().includes(startName.toLowerCase()) ||
+            startName.toLowerCase().includes(stop.name.toLowerCase())
+          );
+          
+          const destinationStop = stops.find(stop => 
+            stop.name.toLowerCase().includes(destinationName.toLowerCase()) ||
+            destinationName.toLowerCase().includes(stop.name.toLowerCase())
+          );
+
+          if (!startStop || !destinationStop) {
+            console.log('Stop not found:', startName, destinationName);
+            continue;
+          }
+
+          if (startStop.id === destinationStop.id) {
+            continue;
+          }
+
+          // Generate routes for this pair
+          const routesForPair = await generateEnhancedRouteOptions(
+            startStop, 
+            destinationStop, 
+            stops,
+            routeFinderConfig
+          );
+          
+          allRoutes.push(...routesForPair);
+        }
+      }
+
+      // Remove duplicates and randomize
+      const uniqueRoutes = removeDuplicateRoutes(allRoutes);
+      const randomizedRoutes = randomizeRoutes(uniqueRoutes, routeFinderConfig.diversity);
+      
+      console.log('🛣️ Final routes found:', randomizedRoutes.length);
+
+      if (randomizedRoutes.length === 0) {
+        alert('No routes found matching your criteria. Try adjusting your parameters.');
+        return;
+      }
+
+      setFoundRoutes(randomizedRoutes.slice(0, routeFinderConfig.maxRoutes));
+      setSelectedRoutes([]);
+      setShowRouteSelection(true);
+      setShowEnhancedRouteFinder(false);
+
+    } catch (error) {
+      console.error('❌ Error finding enhanced routes:', error);
+      alert('Failed to find routes: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // NEW: Randomize routes based on diversity setting
+  const randomizeRoutes = (routes, diversity) => {
+    if (diversity !== 'random') {
+      return sortRoutesByDiversity(routes, diversity);
+    }
+    
+    // Fisher-Yates shuffle for true randomization
+    const shuffled = [...routes];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    
+    // Filter out recently used routes
+    const filtered = shuffled.filter(route => {
+      const routeKey = getRoutePairKey(route.stops);
+      return !usedRoutePairs.has(routeKey);
+    });
+    
+    return filtered.length > 0 ? filtered : shuffled; // Fallback to all routes if no new ones
+  };
+
+  // NEW: Enhanced route generation with station support and diverse options
+ const generateEnhancedRouteOptions = async (startStop, destinationStop, allStops, config) => {
+    const routes = [];
+    const maxRoutesPerType = Math.floor(config.maxRoutes / Math.max(1, config.stopCounts.length));
+    
+    console.log('🎯 Generating routes for stop counts:', config.stopCounts);
+    
+    // Generate routes for each specified stop count
+    for (const stopCount of config.stopCounts) {
+      const routesForCount = await generateRoutesForStopCount(
+        startStop, 
+        destinationStop, 
+        allStops, 
+        stopCount, 
+        maxRoutesPerType,
+        config
+      );
+      routes.push(...routesForCount);
+    }
+
+    // Check for duplicates in database
+    const routesWithDuplicateCheck = await Promise.all(
+      routes.map(async (route) => ({
+        ...route,
+        isDuplicate: config.excludeExisting ? await checkRouteExists(route.stops) : false
+      }))
+    );
+
+    // Filter out duplicates if configured
+    const filteredRoutes = config.excludeExisting 
+      ? routesWithDuplicateCheck.filter(route => !route.isDuplicate)
+      : routesWithDuplicateCheck;
+
+    console.log('✅ Routes after duplicate check:', filteredRoutes.length);
+    return filteredRoutes;
+  };
+
+  // NEW: Generate routes for specific stop count with station support
+const generateRoutesForStopCount = (startStop, destinationStop, allStops, intermediateCount, maxRoutes, includeStations) => {
+    const routes = [];
+    
+    // Handle direct routes (0 intermediate stops)
+    if (intermediateCount === 0) {
+      const directRoute = createDirectRoute(startStop, destinationStop);
+      if (directRoute) {
+        routes.push(directRoute);
+        console.log('🛣️ Added direct route');
+      }
+      return routes;
+    }
+
+    // Filter available stops for intermediate routes
+    const availableStops = allStops.filter(stop => 
+      stop.id !== startStop.id && stop.id !== destinationStop.id
+    );
+
+    console.log(`📍 Total available stops for intermediates: ${availableStops.length}`);
+
+    // If stations are required, prioritize station stops but don't exclude others
+    let candidateStops = availableStops;
+    if (includeStations) {
+      // Separate station stops and non-station stops
+      const stationStops = availableStops.filter(stop => 
+        stop.name.toLowerCase().includes('station') || 
+        stop.name.toLowerCase().includes('bus station') ||
+        stop.name.toLowerCase().includes('terminal') ||
+        stop.name.toLowerCase().includes('stc') ||
+        stop.name.toLowerCase().includes('vip')
+      );
+      
+      const nonStationStops = availableStops.filter(stop => 
+        !stationStops.includes(stop)
+      );
+
+      console.log(`🏢 Station stops: ${stationStops.length}, Non-station stops: ${nonStationStops.length}`);
+
+      // Mix station stops with other stops for diversity
+      // Take all station stops and add some non-station stops
+      const mixedStops = [
+        ...stationStops,
+        ...nonStationStops.slice(0, Math.max(10, stationStops.length)) // Ensure we have enough stops
+      ];
+      
+      if (mixedStops.length >= intermediateCount) {
+        candidateStops = mixedStops;
+        console.log(`🔀 Using mixed stops: ${candidateStops.length} total (${stationStops.length} stations)`);
+      } else {
+        // If not enough mixed stops, use all available stops
+        candidateStops = availableStops;
+        console.log(`📋 Using all available stops: ${candidateStops.length}`);
+      }
+    } else {
+      // If stations are not required, use all stops
+      candidateStops = availableStops;
+      console.log(`📋 Using all stops (stations not required): ${candidateStops.length}`);
+    }
+
+    if (candidateStops.length < intermediateCount) {
+      console.log(`⚠️ Not enough candidate stops for ${intermediateCount} intermediates`);
+      return routes;
+    }
+
+    // Calculate direct distance for reference
+    const directDistance = calculateDistance(
+      startStop.latitude, startStop.longitude,
+      destinationStop.latitude, destinationStop.longitude
+    );
+
+    // Get stops that create reasonable routes (include all stops, not just reasonable ones)
+    const scoredStops = candidateStops
+      .map(stop => ({
+        stop,
+        distanceToStart: calculateDistance(startStop.latitude, startStop.longitude, stop.latitude, stop.longitude),
+        distanceToDest: calculateDistance(stop.latitude, stop.longitude, destinationStop.latitude, destinationStop.longitude),
+        totalDetour: calculateDistance(startStop.latitude, startStop.longitude, stop.latitude, stop.longitude) +
+                     calculateDistance(stop.latitude, stop.longitude, destinationStop.latitude, destinationStop.longitude),
+        isStation: stop.name.toLowerCase().includes('station') || stop.name.toLowerCase().includes('bus station'),
+        // Score based on various factors
+        score: calculateStopScore(stop, startStop, destinationStop, directDistance, includeStations)
+      }))
+      .sort((a, b) => b.score - a.score); // Sort by score descending
+
+    console.log(`🎯 Scored stops for ${intermediateCount} intermediates: ${scoredStops.length}`);
+
+    // Generate routes based on intermediate count
+    if (intermediateCount === 1) {
+      routes.push(...generateOneIntermediateRoutes(startStop, destinationStop, scoredStops, maxRoutes, includeStations));
+    }
+    else {
+      routes.push(...generateMultipleIntermediateRoutes(startStop, destinationStop, scoredStops, intermediateCount, maxRoutes, includeStations));
+    }
+
+    return routes;
+  };
+
+  // NEW: Calculate stop score for better route diversity
+  const calculateStopScore = (stop, startStop, destinationStop, directDistance, includeStations) => {
+    let score = 0;
+    
+    // Distance-based scoring (closer to direct path is better)
+    const detourDistance = calculateDistance(startStop.latitude, startStop.longitude, stop.latitude, stop.longitude) +
+                          calculateDistance(stop.latitude, stop.longitude, destinationStop.latitude, destinationStop.longitude);
+    const detourRatio = detourDistance / directDistance;
+    
+    if (detourRatio < 1.5) score += 50; // Excellent detour ratio
+    else if (detourRatio < 2) score += 30; // Good detour ratio
+    else if (detourRatio < 3) score += 10; // Acceptable detour ratio
+    
+    // Station bonus if configured
+    if (includeStations && (
+      stop.name.toLowerCase().includes('station') || 
+      stop.name.toLowerCase().includes('bus station')
+    )) {
+      score += 20;
+    }
+    
+    // Major location bonus
+    if (stop.name.toLowerCase().includes('market') || 
+        stop.name.toLowerCase().includes('circle') ||
+        stop.name.toLowerCase().includes('terminal') ||
+        stop.name.toLowerCase().includes('junction') ||
+        stop.name.toLowerCase().includes('hospital')) {
+      score += 15;
+    }
+    
+    // Popular stop names bonus
+    const popularNames = ['accra', 'kumasi', 'tema', 'takoradi', 'cape coast', 'sunyani'];
+    if (popularNames.some(name => stop.name.toLowerCase().includes(name))) {
+      score += 10;
+    }
+    
+    return score;
+  };
+
+
+const generateOneIntermediateRoutes = (startStop, destinationStop, scoredStops, maxRoutes, includeStations) => {
+    const routes = [];
+    
+    // Take top scored stops (mix of stations and non-stations)
+    const topStops = scoredStops.slice(0, maxRoutes * 3); // Get more stops for diversity
+    
+    console.log(`🎯 Using ${topStops.length} top-scored stops for 1 intermediate route`);
+    
+    // Ensure we have a good mix
+    const stationStops = topStops.filter(s => s.isStation);
+    const nonStationStops = topStops.filter(s => !s.isStation);
+    
+    console.log(`🏢 Station stops in selection: ${stationStops.length}`);
+    console.log(`📋 Non-station stops in selection: ${nonStationStops.length}`);
+    
+    // Create balanced selection
+    let selectedStops = [];
+    
+    // Always include some station stops if available and configured
+    if (includeStations && stationStops.length > 0) {
+      selectedStops.push(...stationStops.slice(0, Math.ceil(maxRoutes / 2)));
+    }
+    
+    // Add non-station stops to fill the quota
+    const remainingSlots = maxRoutes - selectedStops.length;
+    if (remainingSlots > 0 && nonStationStops.length > 0) {
+      selectedStops.push(...nonStationStops.slice(0, remainingSlots));
+    }
+    
+    // If we still need more stops, take from the general pool
+    if (selectedStops.length < maxRoutes) {
+      const additionalNeeded = maxRoutes - selectedStops.length;
+      selectedStops.push(...topStops.slice(selectedStops.length, selectedStops.length + additionalNeeded));
+    }
+    
+    console.log(`🛣️ Generating ${selectedStops.length} routes with 1 intermediate stop`);
+    
+    selectedStops.forEach(({ stop }) => {
+      const routeStops = [startStop, stop, destinationStop];
+      const totalDistance = calculateRouteDistance(routeStops);
+      
+      routes.push({
+        stops: routeStops,
+        totalDistance: totalDistance.toFixed(2),
+        fares: Array(routeStops.length - 1).fill(''),
+        type: getRouteType(routeStops, 1)
+      });
+    });
+    
+    return routes;
+  };
+
+  // UPDATED: Generate routes with multiple intermediate stops (includes all stops)
+  const generateMultipleIntermediateRoutes = (startStop, destinationStop, scoredStops, intermediateCount, maxRoutes, includeStations) => {
+    const routes = [];
+    const generatedRoutes = new Set();
+    
+    const stops = scoredStops.map(s => s.stop);
+    
+    console.log(`🎯 Generating routes with ${intermediateCount} intermediate stops from ${stops.length} stops`);
+    
+    // Generate combinations focusing on diversity
+    for (let i = 0; i < Math.min(stops.length, 15); i++) {
+      if (routes.length >= maxRoutes) break;
+      
+      const combinations = generateIntermediateCombinations(stops, intermediateCount, i);
+      
+      combinations.forEach(intermediateStops => {
+        if (routes.length >= maxRoutes) return;
+        
+        const routeStops = [startStop, ...intermediateStops, destinationStop];
+        const routeKey = routeStops.map(s => s.id).join('-');
+        
+        if (!generatedRoutes.has(routeKey)) {
+          generatedRoutes.add(routeKey);
+          
+          const totalDistance = calculateRouteDistance(routeStops);
+          routes.push({
+            stops: routeStops,
+            totalDistance: totalDistance.toFixed(2),
+            fares: Array(routeStops.length - 1).fill(''),
+            type: getRouteType(routeStops, intermediateCount)
+          });
+        }
+      });
+    }
+    
+    console.log(`🛣️ Generated ${routes.length} routes with ${intermediateCount} intermediate stops`);
+    return routes;
+  };
+
+  const generateStopCombinations = (stops, count, seed) => {
+    if (count === 1) {
+      return stops.slice(seed, seed + 1).map(stop => [stop]);
+    }
+    
+    const combinations = [];
+    // Simple combination generation - in a real app you'd want more sophisticated logic
+    for (let i = seed; i < Math.min(stops.length, seed + 3); i++) {
+      for (let j = i + 1; j < Math.min(stops.length, i + 4); j++) {
+        if (count === 2) {
+          combinations.push([stops[i], stops[j]]);
+        } else {
+          for (let k = j + 1; k < Math.min(stops.length, j + 3); k++) {
+            combinations.push([stops[i], stops[j], stops[k]]);
+          }
+        }
+      }
+    }
+    
+    return combinations.slice(0, 5); // Limit combinations
+  };
+
+  // NEW: Get route type with station information
+  const getRouteType = (stops, intermediateCount) => {
+    const hasStation = stops.some(stop => 
+      stop.name.toLowerCase().includes('station') || 
+      stop.name.toLowerCase().includes('bus station')
+    );
+    
+    const stationSuffix = hasStation ? '_with_station' : '';
+    
+    if (intermediateCount === 0) return 'direct' + stationSuffix;
+    if (intermediateCount === 1) return '1_intermediate' + stationSuffix;
+    return `${intermediateCount}_intermediate` + stationSuffix;
+  };
+
+  // NEW: Configuration handlers
+  const handleRouteFinderConfigChange = (key, value) => {
+    setRouteFinderConfig(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleAddStopCount = () => {
+    const newCount = routeFinderConfig.newStopCount;
+    if (!routeFinderConfig.stopCounts.includes(newCount)) {
+      setRouteFinderConfig(prev => ({
+        ...prev,
+        stopCounts: [...prev.stopCounts, newCount].sort()
+      }));
+    }
+  };
+
+  const handleRemoveStopCount = (index) => {
+    setRouteFinderConfig(prev => ({
+      ...prev,
+      stopCounts: prev.stopCounts.filter((_, i) => i !== index)
+    }));
+  };
+
+
+  const discoverAutomaticRoutes = async () => {
+    try {
+      setIsLoading(true);
+      
+      console.log('🚀 Starting automatic route discovery with config:', routeFinderConfig);
+      console.log('📍 Target region:', routeFinderRegion || 'All regions');
+      
+      // Get stops based on region filter
+      let availableStops = stops;
+      if (routeFinderRegion) {
+        // In a real implementation, you would filter stops by region
+        // For now, we'll use all stops and simulate regional filtering
+        console.log('Region-based filtering would be implemented here');
+      }
+
+      if (availableStops.length < 2) {
+        alert('Need at least 2 stops in the database to generate routes');
+        return;
+      }
+
+      // Generate automatic routes
+      const foundRoutes = generateAutomaticRoutes(availableStops, routeFinderConfig);
+      
+      console.log('🛣️ Automatically discovered routes:', foundRoutes.length);
+
+      if (foundRoutes.length === 0) {
+        alert('No routes could be generated with the current parameters. Try adjusting stop counts or region.');
+        return;
+      }
+
+      setFoundRoutes(foundRoutes.slice(0, routeFinderConfig.maxRoutes));
+      setSelectedRoutes([]);
+      setShowRouteSelection(true);
+      setShowEnhancedRouteFinder(false);
+
+    } catch (error) {
+      console.error('❌ Error in automatic route discovery:', error);
+      alert('Failed to discover routes: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // NEW: Generate routes automatically without start/end points
+  const generateAutomaticRoutes = (allStops, config) => {
+    const routes = [];
+    const usedPairs = new Set();
+    
+    console.log('🎯 Generating automatic routes from', allStops.length, 'stops');
+    console.log('🛣️ Including direct routes:', config.stopCounts.includes(0));
+    
+    // Identify popular stops (stations, major stops)
+    const popularStops = identifyPopularStops(allStops, config);
+    console.log('📍 Popular stops identified:', popularStops.length);
+    
+    // Generate routes between popular stop pairs
+    for (let i = 0; i < popularStops.length; i++) {
+      if (routes.length >= config.maxRoutes) break;
+      
+      for (let j = i + 1; j < popularStops.length; j++) {
+        if (routes.length >= config.maxRoutes) break;
+        
+        const startStop = popularStops[i];
+        const destinationStop = popularStops[j];
+        const pairKey = `${startStop.id}-${destinationStop.id}`;
+        const reversePairKey = `${destinationStop.id}-${startStop.id}`;
+        
+        // Skip if we've already used this pair (in either direction)
+        if (usedPairs.has(pairKey) || usedPairs.has(reversePairKey)) continue;
+        
+        // Check minimum distance requirement
+        const directDistance = calculateDistance(
+          startStop.latitude, startStop.longitude,
+          destinationStop.latitude, destinationStop.longitude
+        );
+        
+        if (directDistance < config.minDistance) continue;
+        
+        usedPairs.add(pairKey);
+        
+        // Generate routes for this pair
+        const routesForPair = generateRoutesForPair(
+          startStop, 
+          destinationStop, 
+          allStops, 
+          config
+        );
+        
+        routes.push(...routesForPair);
+      }
+    }
+    
+    // Remove duplicates and sort based on diversity preference
+    const uniqueRoutes = removeDuplicateRoutes(routes);
+    const sortedRoutes = sortRoutesByDiversity(uniqueRoutes, config.diversity);
+    
+    console.log('✅ Final automatic routes:', sortedRoutes.length);
+    return sortedRoutes.slice(0, config.maxRoutes);
+  };
+
+  //Add reverse route handler
+const handleAddReverseRoute = (routeIndex) => {
+    setFoundRoutes(prev => {
+      const updated = [...prev];
+      const route = updated[routeIndex];
+      
+      // Create reverse route with the same fares as main route (but reversed)
+      const reverseStops = [...route.stops].reverse();
+      const reverseFares = [...route.fares].reverse().map(fare => fare || '0');
+      const reverseDistance = calculateRouteDistance(reverseStops);
+      
+      updated[routeIndex] = {
+        ...route,
+        reverseRoute: {
+          stops: reverseStops,
+          fares: reverseFares, // Start with same fares as main route
+          totalDistance: reverseDistance.toFixed(2),
+          type: `reverse_${route.type}`
+        }
+      };
+      
+      return updated;
+    });
+  };
+
+
+  // NEW: Identify popular stops for automatic route generation
+  const identifyPopularStops = (allStops, config) => {
+    let popularStops = [...allStops];
+    
+    // Prioritize stations if configured
+    if (config.includeStations) {
+      const stationStops = allStops.filter(stop => 
+        stop.name.toLowerCase().includes('station') || 
+        stop.name.toLowerCase().includes('bus station') ||
+        stop.name.toLowerCase().includes('terminal') ||
+        stop.name.toLowerCase().includes('stc') ||
+        stop.name.toLowerCase().includes('vip') ||
+        stop.name.toLowerCase().includes('market')
+      );
+      
+      if (stationStops.length >= 10) {
+        popularStops = stationStops;
+      } else {
+        // Mix stations with other popular stops
+        const nonStationStops = allStops.filter(stop => !stationStops.includes(stop));
+        popularStops = [...stationStops, ...nonStationStops.slice(0, 20)];
+      }
+    }
+    
+    // Limit to top stops for performance
+    return popularStops.slice(0, 30);
+  };
+
+  // NEW: Generate multiple route options for a stop pair
+ const generateRoutesForPair = (startStop, destinationStop, allStops, config) => {
+    const routes = [];
+    
+    config.stopCounts.forEach(stopCount => {
+      const intermediateCount = stopCount;
+      const maxRoutesPerType = Math.floor(config.maxRoutes / config.stopCounts.length / 10);
+      
+      if (intermediateCount === 0) {
+        // Direct route
+        const directRoute = createDirectRoute(startStop, destinationStop);
+        if (directRoute && parseFloat(directRoute.totalDistance) >= config.minDistance) {
+          routes.push(directRoute);
+        }
+      } else {
+        const routesWithStops = generateRoutesWithIntermediateStops(
+          startStop, 
+          destinationStop, 
+          allStops, 
+          intermediateCount, 
+          maxRoutesPerType,
+          config
+        );
+        routes.push(...routesWithStops);
+      }
+    });
+    
+    return routes;
+  };
+
+  // NEW: Generate routes with intermediate stops
+const generateRoutesWithIntermediateStops = (startStop, destinationStop, allStops, intermediateCount, maxRoutes, config) => {
+    const routes = [];
+    
+    // Handle direct routes
+    if (intermediateCount === 0) {
+      const directRoute = createDirectRoute(startStop, destinationStop);
+      if (directRoute && parseFloat(directRoute.totalDistance) >= config.minDistance) {
+        routes.push(directRoute);
+      }
+      return routes;
+    }
+
+    const availableStops = allStops.filter(stop => 
+      stop.id !== startStop.id && stop.id !== destinationStop.id
+    );
+
+    if (availableStops.length < intermediateCount) {
+      return routes;
+    }
+
+    // Get candidate intermediate stops with scoring
+    const candidateStops = availableStops
+      .map(stop => ({
+        stop,
+        relevance: calculateStopRelevance(stop, startStop, destinationStop, config)
+      }))
+      .sort((a, b) => b.relevance - a.relevance)
+      .slice(0, 20) // Increased limit for better diversity
+      .map(item => item.stop);
+
+    console.log(`🎯 Using ${candidateStops.length} candidate stops for ${intermediateCount} intermediates`);
+
+    // Generate route combinations
+    for (let i = 0; i < Math.min(candidateStops.length, 8); i++) {
+      if (routes.length >= maxRoutes) break;
+      
+      if (intermediateCount === 1) {
+        const routeStops = [startStop, candidateStops[i], destinationStop];
+        const totalDistance = calculateRouteDistance(routeStops);
+        
+        if (totalDistance >= config.minDistance) {
+          routes.push({
+            stops: routeStops,
+            totalDistance: totalDistance.toFixed(2),
+            fares: Array(routeStops.length - 1).fill(''),
+            type: getRouteType(routeStops, 1)
+          });
+        }
+      } else {
+        // For multiple intermediate stops, generate combinations
+        const combinations = generateIntermediateCombinations(
+          candidateStops, 
+          intermediateCount, 
+          i
+        );
+        
+        combinations.forEach(intermediateStops => {
+          if (routes.length >= maxRoutes) return;
+          
+          const routeStops = [startStop, ...intermediateStops, destinationStop];
+          const totalDistance = calculateRouteDistance(routeStops);
+          
+          if (totalDistance >= config.minDistance) {
+            routes.push({
+              stops: routeStops,
+              totalDistance: totalDistance.toFixed(2),
+              fares: Array(routeStops.length - 1).fill(''),
+              type: getRouteType(routeStops, intermediateCount)
+            });
+          }
+        });
+      }
+    }
+    
+    console.log(`🛣️ Generated ${routes.length} routes for ${intermediateCount} intermediates`);
+    return routes;
+  };
+
+  // NEW: Calculate stop relevance for automatic selection
+ const calculateStopRelevance = (stop, startStop, destinationStop, config) => {
+    let relevance = 0;
+    
+    // Distance-based relevance
+    const directDistance = calculateDistance(startStop.latitude, startStop.longitude, destinationStop.latitude, destinationStop.longitude);
+    const detourDistance = calculateDistance(startStop.latitude, startStop.longitude, stop.latitude, stop.longitude) +
+                          calculateDistance(stop.latitude, stop.longitude, destinationStop.latitude, destinationStop.longitude);
+    const detourRatio = detourDistance / directDistance;
+    
+    if (detourRatio < 1.5) relevance += 60; // Excellent detour
+    else if (detourRatio < 2) relevance += 40; // Good detour
+    else if (detourRatio < 3) relevance += 20; // Acceptable detour
+    
+    // Station relevance if configured
+    if (config.includeStations && (
+      stop.name.toLowerCase().includes('station') || 
+      stop.name.toLowerCase().includes('bus station')
+    )) {
+      relevance += 30;
+    } else {
+      // Non-station stops still get some relevance
+      relevance += 10;
+    }
+    
+    // Major location relevance
+    if (stop.name.toLowerCase().includes('market') || 
+        stop.name.toLowerCase().includes('circle') ||
+        stop.name.toLowerCase().includes('terminal') ||
+        stop.name.toLowerCase().includes('junction') ||
+        stop.name.toLowerCase().includes('hospital') ||
+        stop.name.toLowerCase().includes('police')) {
+      relevance += 15;
+    }
+    
+    return relevance;
+  };
+
+  // NEW: Sort routes based on diversity preference
+  const sortRoutesByDiversity = (routes, diversity) => {
+    switch (diversity) {
+      case 'shortest':
+        return routes.sort((a, b) => parseFloat(a.totalDistance) - parseFloat(b.totalDistance));
+      
+      case 'stations':
+        return routes.sort((a, b) => {
+          const aHasStation = a.stops.some(s => s.name.toLowerCase().includes('station'));
+          const bHasStation = b.stops.some(s => s.name.toLowerCase().includes('station'));
+          if (aHasStation && !bHasStation) return -1;
+          if (!aHasStation && bHasStation) return 1;
+          return parseFloat(a.totalDistance) - parseFloat(b.totalDistance);
+        });
+      
+      case 'alternative':
+        // Mix of route lengths and types
+        return routes.sort((a, b) => {
+          const aStops = a.stops.length;
+          const bStops = b.stops.length;
+          if (aStops !== bStops) return bStops - aStops; // Prefer more stops for alternatives
+          return parseFloat(b.totalDistance) - parseFloat(a.totalDistance); // Prefer longer routes
+        });
+      
+      case 'balanced':
+      default:
+        // Balanced approach - mix of everything
+        return routes.sort((a, b) => {
+          const aScore = calculateRouteScore(a);
+          const bScore = calculateRouteScore(b);
+          return bScore - aScore;
+        });
+    }
+  };
+
+  // NEW: Calculate balanced route score
+  const calculateRouteScore = (route) => {
+    let score = 0;
+    
+    // Distance score (medium distances are good)
+    const distance = parseFloat(route.totalDistance);
+    if (distance > 2 && distance < 20) score += 30;
+    if (distance >= 20) score += 10;
+    
+    // Station score
+    const hasStation = route.stops.some(s => s.name.toLowerCase().includes('station'));
+    if (hasStation) score += 25;
+    
+    // Stop count diversity
+    const stopCount = route.stops.length;
+    if (stopCount >= 3 && stopCount <= 5) score += 20;
+    if (stopCount > 5) score += 10;
+    
+    return score;
+  };
+
+  const generateIntermediateCombinations = (stops, count, seed) => {
+    if (count === 1) {
+      return stops.slice(seed, seed + 1).map(stop => [stop]);
+    }
+    
+    const combinations = [];
+    
+    // Simple combination generation for 2 stops
+    if (count === 2) {
+      for (let i = seed; i < Math.min(stops.length, seed + 3); i++) {
+        for (let j = i + 1; j < Math.min(stops.length, i + 4); j++) {
+          combinations.push([stops[i], stops[j]]);
+        }
+      }
+    } 
+    // For 3+ stops, use a more efficient approach
+    else if (count >= 3) {
+      for (let i = seed; i < Math.min(stops.length, seed + 2); i++) {
+        for (let j = i + 1; j < Math.min(stops.length, i + 3); j++) {
+          for (let k = j + 1; k < Math.min(stops.length, j + 3); k++) {
+            if (count === 3) {
+              combinations.push([stops[i], stops[j], stops[k]]);
+            } else {
+              // For more than 3 stops, add additional stops
+              for (let l = k + 1; l < Math.min(stops.length, k + 2); l++) {
+                combinations.push([stops[i], stops[j], stops[k], stops[l]]);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    return combinations.slice(0, 5); // Limit combinations for performance
+  };
+
+  const checkRouteExists = async (stops) => {
+    try {
+      const stopIds = stops.map(stop => stop.id);
+      
+      // Get all routes that contain any of these stops
+      const { data, error } = await supabase
+        .from('route_stops')
+        .select(`
+          route_id,
+          stop_id,
+          stop_order,
+          routes!inner(name)
+        `)
+        .in('stop_id', stopIds)
+        .order('stop_order');
+
+      if (error) throw error;
+
+      // Group by route_id and check for exact sequence match
+      const routesMap = {};
+      data.forEach(rs => {
+        if (!routesMap[rs.route_id]) {
+          routesMap[rs.route_id] = [];
+        }
+        routesMap[rs.route_id].push({
+          stop_id: rs.stop_id,
+          stop_order: rs.stop_order
+        });
+      });
+
+      // Check if any route has the exact same sequence
+      for (const routeId in routesMap) {
+        const routeStops = routesMap[routeId]
+          .sort((a, b) => a.stop_order - b.stop_order)
+          .map(rs => rs.stop_id);
+        
+        if (routeStops.join('-') === stopIds.join('-')) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking route existence:', error);
+      return false;
+    }
+  };
+
+  // NEW: Get route pair key for tracking used routes
+  const getRoutePairKey = (stops) => {
+    return stops.map(stop => stop.id).join('-');
+  };
+
+  const generateSubRoutes = (mainRoute) => {
+    const subRoutes = [];
+    const stops = mainRoute.stops;
+    
+    // Generate all possible consecutive sub-routes
+    for (let startIndex = 0; startIndex < stops.length - 1; startIndex++) {
+      for (let endIndex = startIndex + 1; endIndex < stops.length; endIndex++) {
+        // Only create sub-routes with at least 2 stops
+        if (endIndex - startIndex >= 1) {
+          const subRouteStops = stops.slice(startIndex, endIndex + 1);
+          const subRouteDistance = calculateRouteDistance(subRouteStops);
+          
+          // Calculate fares for sub-route (sum of relevant segments)
+          let subRouteFares = [];
+          for (let i = startIndex; i < endIndex; i++) {
+            subRouteFares.push(mainRoute.fares[i] || '0');
+          }
+          
+          subRoutes.push({
+            stops: subRouteStops,
+            fares: subRouteFares,
+            totalDistance: subRouteDistance.toFixed(2),
+            type: `subroute_${startIndex}_${endIndex}`,
+            isSubRoute: true,
+            parentRouteIndex: mainRoute.parentRouteIndex // Track which main route this came from
+          });
+        }
+      }
+    }
+    
+    return subRoutes;
+  };
+
+  const handleCloseReverseRoute = (routeIndex) => {
+    setFoundRoutes(prev => {
+      const updated = [...prev];
+      updated[routeIndex] = {
+        ...updated[routeIndex],
+        reverseRoute: null
+      };
+      return updated;
+    });
+  };
+
+
   const handleRemoveEditRouteStop = (index) => {
     const newStops = editRouteData.stops.filter((_, i) => i !== index);
     const newFares = editRouteData.fares.filter((_, i) => i !== index);
@@ -1737,6 +3154,13 @@ const handleForgotPassword = async () => {
       stops: newStops,
       fares: newFares,
       distances: newDistances
+    }));
+  };
+
+   const markRoutesWithSubRoutes = (routes) => {
+    return routes.map(route => ({
+      ...route,
+      hasSubRoutes: route.stops.length > 1 
     }));
   };
 
@@ -1821,9 +3245,12 @@ const handleForgotPassword = async () => {
   };
 
   // Route Finder functions
-  const handleStopSearch = (query, field) => {
+   const handleStopSearch = (query, field, index) => {
     if (query.length < 1) {
-      setStopSuggestions({ start: [], destination: [] });
+      setStopSuggestions(prev => ({
+        ...prev,
+        [field]: prev[field].map((arr, i) => i === index ? [] : arr)
+      }));
       return;
     }
 
@@ -1833,28 +3260,29 @@ const handleForgotPassword = async () => {
 
     setStopSuggestions(prev => ({
       ...prev,
-      [field]: filtered
+      [field]: prev[field].map((arr, i) => i === index ? filtered : arr)
     }));
   };
 
-  const handleStartPointChange = (text) => {
-    setStartPoint(text);
-    handleStopSearch(text, 'start');
-  };
 
-  const handleDestinationPointChange = (text) => {
-    setDestinationPoint(text);
-    handleStopSearch(text, 'destination');
-  };
-
-  const handleStopSuggestionSelect = (stopName, field) => {
+  const handleStopSuggestionSelect = (stopName, field, index) => {
     if (field === 'start') {
-      setStartPoint(stopName);
+      const newStartPoints = [...startPoints];
+      newStartPoints[index] = stopName;
+      setStartPoints(newStartPoints);
     } else {
-      setDestinationPoint(stopName);
+      const newDestinationPoints = [...destinationPoints];
+      newDestinationPoints[index] = stopName;
+      setDestinationPoints(newDestinationPoints);
     }
-    setStopSuggestions({ start: [], destination: [] });
+    
+    // Clear suggestions for this specific field and index
+    setStopSuggestions(prev => ({
+      ...prev,
+      [field]: prev[field].map((arr, i) => i === index ? [] : arr)
+    }));
   };
+
 
   // UPDATED: Enhanced route finding algorithm with diverse route options
 const findRoutesBetweenStops = async (startName, destinationName) => {
@@ -2216,15 +3644,36 @@ const calculateRouteDistance = (stops) => {
     );
   };
 
-  const handleRouteFareChange = (routeIndex, stopIndex, fare) => {
+  const handleRouteFareChange = (routeIndex, stopIndex, fare, isReverse = false) => {
     setFoundRoutes(prev => {
       const updated = [...prev];
-      updated[routeIndex].fares[stopIndex] = fare;
+      
+      if (isReverse) {
+        // Update reverse route fare
+        updated[routeIndex] = {
+          ...updated[routeIndex],
+          reverseRoute: {
+            ...updated[routeIndex].reverseRoute,
+            fares: updated[routeIndex].reverseRoute.fares.map((f, i) => 
+              i === stopIndex ? fare : f
+            )
+          }
+        };
+      } else {
+        // Update main route fare
+        updated[routeIndex] = {
+          ...updated[routeIndex],
+          fares: updated[routeIndex].fares.map((f, i) => 
+            i === stopIndex ? fare : f
+          )
+        };
+      }
+      
       return updated;
     });
   };
 
-  const handleSaveSelectedRoutes = async () => {
+const handleSaveSelectedRoutes = async () => {
     if (selectedRoutes.length === 0) {
       alert('Please select at least one route');
       return;
@@ -2232,58 +3681,109 @@ const calculateRouteDistance = (stops) => {
 
     setIsLoading(true);
     try {
-      let savedCount = 0;
+      let allRoutesToSave = [];
+      const newUsedPairs = new Set(usedRoutePairs);
       
+      // First, validate all fares and collect routes
       for (const routeIndex of selectedRoutes) {
         const route = foundRoutes[routeIndex];
         
-        // Validate fares
-        const hasEmptyFares = route.fares.some(fare => !fare || fare === '');
-        if (hasEmptyFares) {
-          alert(`Please fill all fares for Route ${routeIndex + 1}`);
+        // Validate fares for main route
+        const hasEmptyMainFares = route.fares.some(fare => !fare || fare === '');
+        if (hasEmptyMainFares) {
+          alert(`Please fill all fares for main route of Route ${routeIndex + 1}`);
           return;
         }
 
-        const total_distance = calculateRouteDistance(route.stops);
-        const total_fare = route.fares.reduce((sum, fare) => sum + parseFloat(fare || 0), 0);
+        // Validate fares for reverse route if it exists
+        if (route.reverseRoute) {
+          const hasEmptyReverseFares = route.reverseRoute.fares.some(fare => !fare || fare === '');
+          if (hasEmptyReverseFares) {
+            alert(`Please fill all fares for reverse route of Route ${routeIndex + 1}`);
+            return;
+          }
+        }
 
-        // Insert route
-        const { data: routeData, error: routeError } = await supabase
-          .from('routes')
-          .insert([{
-            name: `${route.stops[0].name} to ${route.stops[route.stops.length - 1].name}`,
-            total_distance,
-            total_fare
-          }])
-          .select();
+        // Add main route
+        allRoutesToSave.push({
+          route,
+          name: `${route.stops[0].name} to ${route.stops[route.stops.length - 1].name}`,
+          type: 'main'
+        });
 
-        if (routeError) throw routeError;
+        // Add reverse route if exists
+        if (route.reverseRoute) {
+          allRoutesToSave.push({
+            route: route.reverseRoute,
+            name: `${route.reverseRoute.stops[0].name} to ${route.reverseRoute.stops[route.reverseRoute.stops.length - 1].name}`,
+            type: 'reverse'
+          });
+        }
 
-        // Insert route stops
-        const routeStops = route.stops.map((stop, index) => ({
-          route_id: routeData[0].id,
-          stop_id: stop.id,
-          stop_order: index,
-          fare_to_next: index < route.fares.length ? parseFloat(route.fares[index]) : null,
-          distance_to_next: index < route.stops.length - 1 ? 
-            calculateDistance(
-              stop.latitude,
-              stop.longitude,
-              route.stops[index + 1].latitude,
-              route.stops[index + 1].longitude
-            ) : null
-        }));
-
-        const { error: stopsError } = await supabase
-          .from('route_stops')
-          .insert(routeStops);
-
-        if (stopsError) throw stopsError;
-
-        savedCount++;
+        // Generate and add sub-routes
+        const subRoutes = generateSubRoutes(route);
+        subRoutes.forEach((subRoute, subIndex) => {
+          allRoutesToSave.push({
+            route: subRoute,
+            name: `${subRoute.stops[0].name} to ${subRoute.stops[subRoute.stops.length - 1].name}`,
+            type: 'subroute',
+            parentRoute: `${route.stops[0].name} to ${route.stops[route.stops.length - 1].name}`
+          });
+        });
       }
 
-      alert(`${savedCount} route(s) added successfully!`);
+      // Check for duplicates in database
+      const routesWithDuplicateInfo = await Promise.all(
+        allRoutesToSave.map(async (routeData) => ({
+          ...routeData,
+          isDuplicate: await checkRouteExists(routeData.route.stops),
+          routeKey: getRoutePairKey(routeData.route.stops)
+        }))
+      );
+
+      // Separate duplicates and non-duplicates
+      const duplicateRoutes = routesWithDuplicateInfo.filter(r => r.isDuplicate);
+      const nonDuplicateRoutes = routesWithDuplicateInfo.filter(r => !r.isDuplicate);
+
+      // Show duplicate warning if any duplicates found
+      if (duplicateRoutes.length > 0) {
+        const duplicateNames = duplicateRoutes.map(r => `${r.name} (${r.type})`).join('\n• ');
+        const shouldProceed = window.confirm(
+          `The following routes already exist in the database:\n\n• ${duplicateNames}\n\nDo you want to save only the new routes?`
+        );
+        
+        if (!shouldProceed) {
+          return; // User canceled
+        }
+      }
+
+      // Save only non-duplicate routes
+      let savedCount = 0;
+      for (const routeData of nonDuplicateRoutes) {
+        await saveRouteToDatabase(routeData.route, routeData.name);
+        savedCount++;
+        
+        // Add to used pairs
+        newUsedPairs.add(routeData.routeKey);
+      }
+
+      // Update used pairs
+      setUsedRoutePairs(newUsedPairs);
+
+      // Show success message with details
+      const mainCount = nonDuplicateRoutes.filter(r => r.type === 'main').length;
+      const reverseCount = nonDuplicateRoutes.filter(r => r.type === 'reverse').length;
+      const subrouteCount = nonDuplicateRoutes.filter(r => r.type === 'subroute').length;
+      const duplicateCount = duplicateRoutes.length;
+
+      let message = `${savedCount} route(s) saved successfully!`;
+      if (mainCount > 0) message += `\n• ${mainCount} main route(s)`;
+      if (reverseCount > 0) message += `\n• ${reverseCount} reverse route(s)`;
+      if (subrouteCount > 0) message += `\n• ${subrouteCount} sub-route(s)`;
+      if (duplicateCount > 0) message += `\n• ${duplicateCount} duplicate route(s) skipped`;
+
+      alert(message);
+
       setShowRouteSelection(false);
       setFoundRoutes([]);
       setSelectedRoutes([]);
@@ -2295,6 +3795,45 @@ const calculateRouteDistance = (stops) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // NEW: Save route to database helper
+  const saveRouteToDatabase = async (route, routeName) => {
+    const total_distance = calculateRouteDistance(route.stops);
+    const total_fare = route.fares.reduce((sum, fare) => sum + parseFloat(fare || 0), 0);
+
+    // Insert route
+    const { data: routeData, error: routeError } = await supabase
+      .from('routes')
+      .insert([{
+        name: routeName,
+        total_distance,
+        total_fare
+      }])
+      .select();
+
+    if (routeError) throw routeError;
+
+    // Insert route stops
+    const routeStops = route.stops.map((stop, index) => ({
+      route_id: routeData[0].id,
+      stop_id: stop.id,
+      stop_order: index,
+      fare_to_next: index < route.fares.length ? parseFloat(route.fares[index]) : null,
+      distance_to_next: index < route.stops.length - 1 ? 
+        calculateDistance(
+          stop.latitude,
+          stop.longitude,
+          route.stops[index + 1].latitude,
+          route.stops[index + 1].longitude
+        ) : null
+    }));
+
+    const { error: stopsError } = await supabase
+      .from('route_stops')
+      .insert(routeStops);
+
+    if (stopsError) throw stopsError;
   };
 
   const toggleBottomSheet = () => {
@@ -2670,17 +4209,34 @@ const calculateRouteDistance = (stops) => {
                       </button>
                     </div>
                   </div>
-                ) : showRouteFinder ? (
-                  <RouteFinder
-                    startPoint={startPoint}
-                    destinationPoint={destinationPoint}
+                ) : showEnhancedRouteFinder ? (
+                  <EnhancedRouteFinder
+                    startPoints={startPoints}
+                    destinationPoints={destinationPoints}
                     onStartPointChange={handleStartPointChange}
                     onDestinationPointChange={handleDestinationPointChange}
-                    onFindRoutes={() => findRoutesBetweenStops(startPoint, destinationPoint)}
-                    onCancel={() => setShowRouteFinder(false)}
+                    onAddStartPoint={handleAddStartPoint}
+                    onAddDestinationPoint={handleAddDestinationPoint}
+                    onRemoveStartPoint={handleRemoveStartPoint}
+                    onRemoveDestinationPoint={handleRemoveDestinationPoint}
+                    onFindRoutes={findEnhancedRoutesBetweenStops}
+                    onFindAutomaticRoutes={discoverAutomaticRoutes}
+                    onCancel={() => {
+                      setShowEnhancedRouteFinder(false);
+                      setStartPoints(['']);
+                      setDestinationPoints(['']);
+                    }}
                     isLoading={isLoading}
                     stopSuggestions={stopSuggestions}
                     onStopSuggestionSelect={handleStopSuggestionSelect}
+                    routeConfig={routeFinderConfig}
+                    onRouteConfigChange={handleRouteFinderConfigChange}
+                    onAddStopCount={handleAddStopCount}
+                    onRemoveStopCount={handleRemoveStopCount}
+                    selectedRegion={routeFinderRegion}
+                    onRegionChange={setRouteFinderRegion}
+                    automaticMode={automaticMode}
+                    onToggleAutomaticMode={setAutomaticMode}
                   />
                 ) : (
                   <RouteForm
@@ -2698,7 +4254,7 @@ const calculateRouteDistance = (stops) => {
                     onRemoveStop={handleRemoveRouteStop}
                     onAddRoute={handleAddRoute}
                     onCancel={() => setNewRoute({ name: '', stops: [], fares: [], distances: [] })}
-                    onOpenRouteFinder={() => setShowRouteFinder(true)}
+                    onOpenRouteFinder={() => setShowEnhancedRouteFinder(true)}
                     isLoading={isLoading}
                   />
                 )}
@@ -2763,6 +4319,8 @@ const calculateRouteDistance = (stops) => {
         onSaveRoutes={handleSaveSelectedRoutes}
         onCancel={() => setShowRouteSelection(false)}
         isLoading={isLoading}
+        onAddReverseRoute={handleAddReverseRoute}
+        onCloseReverseRoute={handleCloseReverseRoute}
       />
 
       {isSelectingLocation && (
