@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import './AdminHomeScreen.css';
 import MapComponent from './MapComponent';
@@ -35,6 +34,7 @@ import {
   Type,
   CalendarDays
 } from 'lucide-react';
+import RouteCreationWithMap from './RouteCreationWithMap';
 
 // Ghana regions
 const GHANA_REGIONS = [
@@ -1608,6 +1608,13 @@ const AdminHomeScreen = () => {
   const [routeCache, setRouteCache] = useState(new Map());
   const [currentSearchKey, setCurrentSearchKey] = useState('');
 
+  // Route creation with map plotting state
+  const [routeCreationMode, setRouteCreationMode] = useState(null); // 'plotting' or 'selecting'
+  const [plottedStops, setPlottedStops] = useState([]); // Stops plotted on map
+  const [currentPlottingStop, setCurrentPlottingStop] = useState(null);
+
+  const [showRoutePaths, setShowRoutePaths] = useState(true);
+
   // Filter stops based on match whole word setting
   const filterStopsByName = (stopsList, query, wholeWord = false) => {
     if (!query.trim()) return stopsList;
@@ -2427,6 +2434,269 @@ const findStopsUsingNominatim = async (region) => {
     setEditRouteData(prev => ({ ...prev, distances: updatedDistances }));
   };
 
+  // Route Creation with Map Handlers
+  const handleStartRouteCreation = (mode) => {
+    setRouteCreationMode(mode);
+    setPlottedStops([]);
+    setCurrentPlottingStop(null);
+    setShowBottomSheet(true);
+    setActiveSection('routes');
+  };
+
+  const calculateDistanceToNext = (currentStops, nextStop) => {
+    if (currentStops.length === 0) return null;
+    const lastStop = currentStops[currentStops.length - 1];
+    return calculateDistance(
+      lastStop.latitude,
+      lastStop.longitude,
+      nextStop.latitude,
+      nextStop.longitude
+    ).toFixed(2);
+  };
+
+  const handleMapPressForRoute = (lat, lng) => {
+  if (routeCreationMode === 'plotting') {
+    // Find if there's an existing stop nearby
+    const existingStop = stops.find(stop => 
+      Math.abs(stop.latitude - lat) < 0.001 &&
+      Math.abs(stop.longitude - lng) < 0.001
+    );
+
+    if (existingStop) {
+      // Add existing stop
+      setPlottedStops(prev => [...prev, {
+        ...existingStop,
+        isNew: false,
+        distanceToNext: calculateDistanceToNext(prev, existingStop)
+      }]);
+    } else {
+      // Create new temporary stop
+      const newStop = {
+        id: `temp-${Date.now()}`,
+        name: '',
+        latitude: lat,
+        longitude: lng,
+        isNew: true,
+        tempName: '',
+        distanceToNext: calculateDistanceToNext(plottedStops, { latitude: lat, longitude: lng })
+      };
+      setPlottedStops(prev => [...prev, newStop]);
+    }
+  } else if (routeCreationMode === 'selecting') {
+    // In "select existing stops" mode, find and select the nearest existing stop
+    handleSelectExistingStopFromMap(lat, lng);
+  }
+  };
+  
+  const handleSelectExistingStopFromMap = (lat, lng) => {
+    // Find the nearest existing stop (within 0.01 degrees ~ 1km)
+    let nearestStop = null;
+    let minDistance = Infinity;
+  
+    stops.forEach(stop => {
+      const distance = calculateDistance(lat, lng, stop.latitude, stop.longitude);
+      if (distance < 1 && distance < minDistance) { // Within 1km
+        minDistance = distance;
+        nearestStop = stop;
+      }
+    });
+  
+    if (nearestStop) {
+      // Check if stop is already in the route
+      const isAlreadyAdded = plottedStops.some(s =>
+        !s.isNew && s.id === nearestStop.id
+      );
+    
+      if (!isAlreadyAdded) {
+        // Add the existing stop to the route
+        setPlottedStops(prev => [...prev, {
+          ...nearestStop,
+          isNew: false,
+          distanceToNext: calculateDistanceToNext(prev, nearestStop)
+        }]);
+      
+        // Also add to the newRoute state for consistency
+        setNewRoute(prev => ({
+          ...prev,
+          stops: [...prev.stops, nearestStop],
+          fares: [...prev.fares, ''],
+          distances: [...prev.distances, calculateDistanceToNext(prev.stops, nearestStop)]
+        }));
+      } else {
+        alert(`"${nearestStop.name}" is already in the route`);
+      }
+    } else {
+      alert('No existing stop found nearby. Switch to "Plot Stops on Map" mode to add new stops.');
+    }
+  };
+
+  const handleNamePlottedStop = (index, name) => {
+    setPlottedStops(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        tempName: name,
+        name: name || `Stop ${index + 1}`
+      };
+      return updated;
+    });
+  };
+
+  const handleRemovePlottedStop = (index) => {
+    setPlottedStops(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddFare = (index, fare) => {
+    setPlottedStops(prev => {
+      const updated = [...prev];
+      if (index < updated.length - 1) {
+        updated[index] = {
+          ...updated[index],
+          fareToNext: fare
+        };
+      }
+      return updated;
+    });
+  };
+
+  const handleSavePlottedRoute = async () => {
+    if (plottedStops.length < 2) {
+      alert('Route must have at least 2 stops');
+      return;
+    }
+
+    // Validate all new stops have names
+    const unnamedStops = plottedStops.filter(stop => stop.isNew && !stop.tempName);
+    if (unnamedStops.length > 0) {
+      alert('Please name all new stops');
+      return;
+    }
+
+    // Validate fares
+    const missingFares = plottedStops.slice(0, -1).some((stop, index) => !stop.fareToNext);
+    if (missingFares) {
+      alert('Please enter fares for all segments');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // First, save any new stops to database
+      const newStopsToSave = plottedStops.filter(stop => stop.isNew);
+      let savedStops = [...stops];
+
+      if (newStopsToSave.length > 0) {
+        const { data: savedStopData, error: stopError } = await supabase
+          .from('stops')
+          .insert(
+            newStopsToSave.map(stop => ({
+              name: stop.tempName,
+              latitude: stop.latitude,
+              longitude: stop.longitude
+            }))
+          )
+          .select();
+
+        if (stopError) throw stopError;
+        
+        savedStops = [...savedStops, ...savedStopData];
+        setStops(savedStops);
+      }
+
+      // Create route with stops
+      const total_distance = plottedStops.reduce((sum, stop, index) => {
+        if (index < plottedStops.length - 1) {
+          return sum + (parseFloat(stop.distanceToNext) || 0);
+        }
+        return sum;
+      }, 0);
+
+      const total_fare = plottedStops.reduce((sum, stop) => {
+        return sum + (parseFloat(stop.fareToNext) || 0);
+      }, 0);
+
+      const { data: routeData, error: routeError } = await supabase
+        .from('routes')
+        .insert([{
+          name: newRoute.name,
+          total_distance,
+          total_fare,
+          description: newRoute.description || null,
+          travel_time_minutes: newRoute.travelTimeMinutes ? parseInt(newRoute.travelTimeMinutes) : null,
+          peak_hours: newRoute.peakHours || null,
+          frequency: newRoute.frequency || null,
+          vehicle_type: newRoute.vehicleType || null,
+          notes: newRoute.notes || null,
+          amenities: newRoute.amenities || [],
+          operating_hours: newRoute.operatingHours
+        }])
+        .select();
+
+      if (routeError) throw routeError;
+
+      // Get stop IDs (existing or newly created)
+      const stopIds = plottedStops.map(plottedStop => {
+        if (plottedStop.isNew) {
+          const saved = savedStops.find(s => 
+            Math.abs(s.latitude - plottedStop.latitude) < 0.001 &&
+            Math.abs(s.longitude - plottedStop.longitude) < 0.001 &&
+            s.name === plottedStop.tempName
+          );
+          return saved?.id;
+        }
+        return plottedStop.id;
+      }).filter(id => id);
+
+      // Create route stops
+      const routeStops = stopIds.map((stopId, index) => ({
+        route_id: routeData[0].id,
+        stop_id: stopId,
+        stop_order: index,
+        fare_to_next: index < plottedStops.length - 1 ? parseFloat(plottedStops[index].fareToNext) : null,
+        distance_to_next: index < plottedStops.length - 1 ? parseFloat(plottedStops[index].distanceToNext) : null
+      }));
+
+      const { error: stopsError } = await supabase
+        .from('route_stops')
+        .insert(routeStops);
+
+      if (stopsError) throw stopsError;
+
+      alert('Route created successfully!');
+      
+      // Reset everything
+      setRouteCreationMode(null);
+      setPlottedStops([]);
+      setNewRoute({
+        name: '',
+        stops: [],
+        fares: [],
+        distances: [],
+        description: '',
+        travelTimeMinutes: '',
+        peakHours: '',
+        frequency: '',
+        vehicleType: '',
+        notes: '',
+        amenities: [],
+        operatingHours: {
+          start: '06:00',
+          end: '22:00',
+          days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        }
+      });
+      
+      loadRoutes();
+      loadStops();
+
+    } catch (error) {
+      console.error('Error creating route:', error);
+      alert('Failed to create route: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load functions
   const loadStops = async () => {
     setIsLoading(true);
@@ -2572,6 +2842,9 @@ const handleForgotPassword = async () => {
         }));
       }
       setIsSelectingLocation(false);
+    }
+    if (routeCreationMode === 'plotting') {
+      handleMapPressForRoute(lat, lng);
     }
   };
 
@@ -4430,6 +4703,27 @@ const removeDuplicateRoutes = (routes) => {
   
   return unique;
 };
+  
+  const handleStopClickFromMap = (stop) => {
+  if (routeCreationMode === 'selecting') {
+    // Check if stop is already in the route
+    const isAlreadyAdded = plottedStops.some(s => !s.isNew && s.id === stop.id);
+    
+    if (!isAlreadyAdded) {
+      // Add the existing stop to the route
+      setPlottedStops(prev => [...prev, {
+        ...stop,
+        isNew: false,
+        distanceToNext: calculateDistanceToNext(prev, stop)
+      }]);
+      
+      // Show feedback
+      console.log(`Added "${stop.name}" to route`);
+    } else {
+      alert(`"${stop.name}" is already in your route`);
+    }
+  }
+};
 
 // Create direct route between two stops
 const createDirectRoute = (startStop, destinationStop) => {
@@ -4751,8 +5045,18 @@ return (
             selectedStop={editingStop || (newStop.latitude ? newStop : null)}
             previewStop={previewStop} 
             panToLocation={panToLocation} 
-            onMapPress={handleMapPress}
-            isSelectingLocation={isSelectingLocation}
+            onMapPress={(lat, lng) => {
+              if (routeCreationMode === 'plotting') {
+                handleMapPressForRoute(lat, lng);
+              } else if (isSelectingLocation) {
+                handleMapPress(lat, lng);
+              }
+            }}
+            isSelectingLocation={isSelectingLocation || routeCreationMode === 'plotting'}
+            plottedStops={plottedStops}
+            routeCreationMode={routeCreationMode}
+            onStopClick={handleStopClickFromMap}
+            showRoutePaths={showRoutePaths && routeCreationMode !== null}
           />
       </div>
 
@@ -5021,7 +5325,85 @@ return (
 
             {activeSection === 'routes' && (
               <div className="management-container">
-                {editingRoute ? (
+                {routeCreationMode ? (
+                  <RouteCreationWithMap
+                    onCancel={() => {
+                      setRouteCreationMode(null);
+                      setPlottedStops([]);
+                    }}
+                    onSave={handleSavePlottedRoute}
+                    isLoading={isLoading}
+                    existingStops={stops}
+                    onPlotStop={() => setRouteCreationMode('plotting')}
+                    plottedStops={plottedStops}
+                    onRemovePlottedStop={handleRemovePlottedStop}
+                    onNamePlottedStop={handleNamePlottedStop}
+                    onAddFare={handleAddFare}
+                    fares={plottedStops.map(stop => stop.fareToNext)}
+                    routeName={newRoute.name}
+                    onRouteNameChange={(text) => setNewRoute(prev => ({ ...prev, name: text }))}
+                    onSelectExistingStop={() => setRouteCreationMode('selecting')}
+                    isSelectingExisting={routeCreationMode === 'selecting'}
+                    routeInfo={{
+                      description: newRoute.description,
+                      travelTimeMinutes: newRoute.travelTimeMinutes,
+                      peakHours: newRoute.peakHours,
+                      frequency: newRoute.frequency,
+                      vehicleType: newRoute.vehicleType,
+                      notes: newRoute.notes,
+                      amenities: newRoute.amenities,
+                      operatingHours: newRoute.operatingHours
+                    }}
+                    onRouteInfoChange={(field, value) => {
+                      setNewRoute(prev => ({ ...prev, [field]: value }));
+                    }}
+                    onAmenityToggle={(amenity) => {
+                      setNewRoute(prev => ({
+                        ...prev,
+                        amenities: prev.amenities.includes(amenity)
+                          ? prev.amenities.filter(a => a !== amenity)
+                          : [...prev.amenities, amenity]
+                      }));
+                    }}
+                    onOperatingHoursChange={(field, value) => {
+                      setNewRoute(prev => ({
+                        ...prev,
+                        operatingHours: {
+                          ...prev.operatingHours,
+                          [field]: value
+                        }
+                      }));
+                    }}
+                    onOperatingDayToggle={(day) => {
+                      setNewRoute(prev => {
+                        const newDays = prev.operatingHours.days.includes(day)
+                          ? prev.operatingHours.days.filter(d => d !== day)
+                          : [...prev.operatingHours.days, day];
+                        return {
+                          ...prev,
+                          operatingHours: {
+                            ...prev.operatingHours,
+                            days: newDays
+                          }
+                        };
+                      });
+                    }}
+                  onAddStopFromSearch={(stop) => {
+                    const isAlreadyAdded = plottedStops.some(s => !s.isNew && s.id === stop.id);
+                    if (!isAlreadyAdded) {
+                      setPlottedStops(prev => [...prev, {
+                        ...stop,
+                        isNew: false,
+                        distanceToNext: calculateDistanceToNext(prev, stop)
+                      }]);
+                      setSearchQuery('');
+                      setSearchResults([]);
+                    } else {
+                      alert(`"${stop.name}" is already in the route`);
+                    }
+                  }}
+                  />
+                ) : editingRoute ? (
                   <div className="form-container">
                     <h2 className="form-title">Edit Route</h2>
                     
@@ -5175,80 +5557,117 @@ return (
                     onMatchWholeWordToggle={handleMatchWholeWordToggle}
                   />
                 ) : (
-                  <RouteForm
-                    newRoute={newRoute}
-                    onRouteNameChange={(text) => setNewRoute(prev => ({ ...prev, name: text }))}
-                    searchQuery={searchQuery}
-                    onSearchChange={handleRouteStopSearch}
-                    searchResults={searchResults}
-                    onAddRouteStop={handleAddRouteStop}
-                    onFareChange={(text, index) => {
-                      const newFares = [...newRoute.fares];
-                      newFares[index] = text;
-                      setNewRoute(prev => ({ ...prev, fares: newFares }));
-                    }}
-                    onRemoveStop={handleRemoveRouteStop}
-                    onAddRoute={handleAddRoute}
-                    onCancel={() => setNewRoute({
-                      name: '',
-                      stops: [],
-                      fares: [],
-                      distances: [],
-                      description: '',
-                      travelTimeMinutes: '',
-                      peakHours: '',
-                      frequency: '',
-                      vehicleType: '',
-                      notes: '',
-                      amenities: [],
-                      operatingHours: {
-                        start: '06:00',
-                        end: '22:00',
-                        days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-                      }
-                    })}
-                    onOpenRouteFinder={() => setShowEnhancedRouteFinder(true)}
-                    isLoading={isLoading}
-                    onRouteInfoChange={(field, value) => {
-                      setNewRoute(prev => ({ ...prev, [field]: value }));
-                    }}
-                    onAmenityToggle={(amenity) => {
-                      setNewRoute(prev => ({
-                        ...prev,
-                        amenities: prev.amenities.includes(amenity)
-                          ? prev.amenities.filter(a => a !== amenity)
-                          : [...prev.amenities, amenity]
-                      }));
-                    }}
-                    onOperatingHoursChange={(field, value) => {
-                      setNewRoute(prev => ({
-                        ...prev,
+                  <div>
+                    <div className="route-creation-options">
+                      <button 
+                        className="creation-option-button"
+                        onClick={() => handleStartRouteCreation('plotting')}
+                      >
+                        <MapPin size={20} />
+                        <div className="option-content">
+                          <h4>Plot Stops on Map</h4>
+                          <p>Click on map to add stops. Name new stops and add fares.</p>
+                        </div>
+                      </button>
+                      
+                      <button 
+                        className="creation-option-button"
+                        onClick={() => handleStartRouteCreation('selecting')}
+                      >
+                        <Search size={20} />
+                        <div className="option-content">
+                          <h4>Select Existing Stops</h4>
+                          <p>Choose from existing stops to create a route.</p>
+                        </div>
+                      </button>
+                      
+                      <button 
+                        className="creation-option-button"
+                        onClick={() => setShowEnhancedRouteFinder(true)}
+                      >
+                        <Route size={20} />
+                        <div className="option-content">
+                          <h4>Find Routes Automatically</h4>
+                          <p>Generate routes between start and destination points.</p>
+                        </div>
+                      </button>
+                    </div>
+                    
+                    <RouteForm
+                      newRoute={newRoute}
+                      onRouteNameChange={(text) => setNewRoute(prev => ({ ...prev, name: text }))}
+                      searchQuery={searchQuery}
+                      onSearchChange={handleRouteStopSearch}
+                      searchResults={searchResults}
+                      onAddRouteStop={handleAddRouteStop}
+                      onFareChange={(text, index) => {
+                        const newFares = [...newRoute.fares];
+                        newFares[index] = text;
+                        setNewRoute(prev => ({ ...prev, fares: newFares }));
+                      }}
+                      onRemoveStop={handleRemoveRouteStop}
+                      onAddRoute={handleAddRoute}
+                      onCancel={() => setNewRoute({
+                        name: '',
+                        stops: [],
+                        fares: [],
+                        distances: [],
+                        description: '',
+                        travelTimeMinutes: '',
+                        peakHours: '',
+                        frequency: '',
+                        vehicleType: '',
+                        notes: '',
+                        amenities: [],
                         operatingHours: {
-                          ...prev.operatingHours,
-                          [field]: value
+                          start: '06:00',
+                          end: '22:00',
+                          days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
                         }
-                      }));
-                    }}
-                    onOperatingDayToggle={(day) => {
-                      setNewRoute(prev => {
-                        const newDays = prev.operatingHours.days.includes(day)
-                          ? prev.operatingHours.days.filter(d => d !== day)
-                          : [...prev.operatingHours.days, day];
-                        return {
+                      })}
+                      onOpenRouteFinder={() => setShowEnhancedRouteFinder(true)}
+                      isLoading={isLoading}
+                      onRouteInfoChange={(field, value) => {
+                        setNewRoute(prev => ({ ...prev, [field]: value }));
+                      }}
+                      onAmenityToggle={(amenity) => {
+                        setNewRoute(prev => ({
+                          ...prev,
+                          amenities: prev.amenities.includes(amenity)
+                            ? prev.amenities.filter(a => a !== amenity)
+                            : [...prev.amenities, amenity]
+                        }));
+                      }}
+                      onOperatingHoursChange={(field, value) => {
+                        setNewRoute(prev => ({
                           ...prev,
                           operatingHours: {
                             ...prev.operatingHours,
-                            days: newDays
+                            [field]: value
                           }
-                        };
-                      });
-                    }}
-                    matchWholeWord={matchWholeWord}
-                    onMatchWholeWordToggle={handleMatchWholeWordToggle}
-                  />
+                        }));
+                      }}
+                      onOperatingDayToggle={(day) => {
+                        setNewRoute(prev => {
+                          const newDays = prev.operatingHours.days.includes(day)
+                            ? prev.operatingHours.days.filter(d => d !== day)
+                            : [...prev.operatingHours.days, day];
+                          return {
+                            ...prev,
+                            operatingHours: {
+                              ...prev.operatingHours,
+                              days: newDays
+                            }
+                          };
+                        });
+                      }}
+                      matchWholeWord={matchWholeWord}
+                      onMatchWholeWordToggle={handleMatchWholeWordToggle}
+                    />
+                  </div>
                 )}
 
-                {!editingRoute && !showRouteFinder && (
+                {!routeCreationMode && !editingRoute && !showEnhancedRouteFinder && (
                   <div className="routes-list">
                     <h3 className="list-title">Existing Routes ({routes.length})</h3>
                     <div className="search-box-container">

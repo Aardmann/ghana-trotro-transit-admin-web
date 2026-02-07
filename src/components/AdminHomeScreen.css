@@ -1215,7 +1215,7 @@ body {
 
 .preview-button {
   padding: 6px 12px;
-  background: #3B82F6;
+  background: #6b21a8;
   color: white;
   border: none;
   border-radius: 6px;
@@ -2705,4 +2705,242 @@ body {
     flex: 1;
     justify-content: center;
   }
+}
+
+/* Route Creation Options */
+.route-creation-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.creation-option-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.creation-option-button:hover {
+  border-color: #6b21a8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(107, 33, 168, 0.1);
+}
+
+.creation-option-button svg {
+  color: #6b21a8;
+  flex-shrink: 0;
+}
+
+.option-content h4 {
+  margin: 0 0 8px 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.option-content p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Route Creation with Map */
+.creation-mode-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.mode-button {
+  flex: 1;
+  padding: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.mode-button.mode-active {
+  border-color: #6b21a8;
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.mode-button:hover:not(.mode-active) {
+  border-color: #9ca3af;
+}
+
+/* Plotted Stops */
+.plotted-stops-list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 16px 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.plotted-stop-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.plotted-stop-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.new-stop-naming {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stop-name-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.stop-name-input:focus {
+  outline: none;
+  border-color: #6b21a8;
+}
+
+.new-badge {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.existing-stop-name {
+  font-weight: 600;
+  color: #111827;
+}
+
+.stop-coordinates {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: monospace;
+}
+
+.distance-text {
+  font-size: 12px;
+  color: #059669;
+  font-weight: 500;
+}
+
+.plotting-instructions {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.instruction-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.instruction-item:last-child {
+  margin-bottom: 0;
+}
+
+.instruction-text {
+  font-size: 14px;
+  color: #0369a1;
+}
+
+/* Add to AdminHomeScreen.css */
+.existing-stop-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.existing-badge {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Enhanced mode indicator */
+.mode-indicator {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 12px 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  border: 2px solid;
+}
+
+.mode-indicator.plotting {
+  color: #6b21a8;
+  border-color: #6b21a8;
+}
+
+.mode-indicator.selecting {
+  color: #10b981;
+  border-color: #10b981;
+}
+
+/* Make plotted stops more visible on map */
+.custom-marker {
+  z-index: 1000 !important;
+}
+
+/* Update the overlay text for route creation */
+.overlay-text.route-creation {
+  background: #6b21a8;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.overlay-text.route-creation.selecting {
+  background: #10b981;
 }
