@@ -2944,3 +2944,132 @@ body {
 .overlay-text.route-creation.selecting {
   background: #10b981;
 }
+
+/* Route Path Toggle */
+.route-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.route-path-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.route-path-toggle:hover {
+  background: #e5e7eb;
+}
+
+.route-path-toggle.active {
+  background: #6b21a8;
+  color: white;
+  border-color: #6b21a8;
+}
+
+/* Route Distance Badge */
+.route-distance-badge {
+  margin-left: 12px;
+  padding: 4px 8px;
+  background: #10b981;
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Route Stop Markers */
+.route-stop-marker {
+  z-index: 1000 !important;
+}
+
+/* Leaflet Routing Machine Overrides */
+.leaflet-routing-container {
+  display: none !important; /* Hide the instructions panel */
+}
+
+.leaflet-routing-alt {
+  display: none !important;
+}
+
+/* Route line styles */
+.route-line {
+  stroke-dasharray: 10, 10;
+  animation: dash 1s linear infinite;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: 20;
+  }
+}
+
+/* Distance calculation indicator */
+.distance-calculating {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.distance-calculated {
+  color: #059669;
+  font-weight: 600;
+}
+
+/* Route creation progress */
+.route-progress {
+  position: fixed;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 10px 20px;
+  border-radius: 15px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.route-progress .progress-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f3f4f6;
+}
+
+.route-progress .progress-item.active {
+  background: #6b21a8;
+  color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .route-progress {
+    top: 100px;
+    font-size: 12px;
+    padding: 8px 16px;
+  }
+  
+  .route-distance-badge {
+    margin-left: 8px;
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+}

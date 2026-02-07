@@ -2454,7 +2454,7 @@ const findStopsUsingNominatim = async (region) => {
     ).toFixed(2);
   };
 
-  const handleMapPressForRoute = (lat, lng) => {
+const handleMapPressForRoute = (lat, lng) => {
   if (routeCreationMode === 'plotting') {
     // Find if there's an existing stop nearby
     const existingStop = stops.find(stop => 
@@ -2462,15 +2462,41 @@ const findStopsUsingNominatim = async (region) => {
       Math.abs(stop.longitude - lng) < 0.001
     );
 
+    const distanceToNext = calculateDistanceToNext(plottedStops, existingStop || { latitude: lat, longitude: lng });
+    
+    console.log('Plotting stop with calculated distance:', distanceToNext, 'km');
+
     if (existingStop) {
-      // Add existing stop
-      setPlottedStops(prev => [...prev, {
+      // Add existing stop with calculated distance
+      const updatedPlottedStops = [...plottedStops, {
         ...existingStop,
         isNew: false,
-        distanceToNext: calculateDistanceToNext(prev, existingStop)
-      }]);
+        distanceToNext: distanceToNext,
+        fareToNext: ''
+      }];
+      
+      setPlottedStops(updatedPlottedStops);
+      
+      // Update the previous stop's distance
+      if (updatedPlottedStops.length > 1) {
+        const updatedWithDistances = [...updatedPlottedStops];
+        const prevStopIndex = updatedWithDistances.length - 2;
+        updatedWithDistances[prevStopIndex] = {
+          ...updatedWithDistances[prevStopIndex],
+          distanceToNext: distanceToNext
+        };
+        setPlottedStops(updatedWithDistances);
+      }
+      
+      // Update newRoute state
+      setNewRoute(prev => ({
+        ...prev,
+        stops: [...prev.stops, existingStop],
+        fares: [...prev.fares, ''],
+        distances: [...prev.distances, distanceToNext]
+      }));
     } else {
-      // Create new temporary stop
+      // Create new temporary stop with calculated distance
       const newStop = {
         id: `temp-${Date.now()}`,
         name: '',
@@ -2478,15 +2504,36 @@ const findStopsUsingNominatim = async (region) => {
         longitude: lng,
         isNew: true,
         tempName: '',
-        distanceToNext: calculateDistanceToNext(plottedStops, { latitude: lat, longitude: lng })
+        distanceToNext: distanceToNext,
+        fareToNext: ''
       };
-      setPlottedStops(prev => [...prev, newStop]);
+      
+      const updatedPlottedStops = [...plottedStops, newStop];
+      setPlottedStops(updatedPlottedStops);
+      
+      // Update the previous stop's distance
+      if (updatedPlottedStops.length > 1) {
+        const updatedWithDistances = [...updatedPlottedStops];
+        const prevStopIndex = updatedWithDistances.length - 2;
+        updatedWithDistances[prevStopIndex] = {
+          ...updatedWithDistances[prevStopIndex],
+          distanceToNext: distanceToNext
+        };
+        setPlottedStops(updatedWithDistances);
+      }
+      
+      // Update newRoute state
+      setNewRoute(prev => ({
+        ...prev,
+        stops: [...prev.stops, { id: newStop.id, name: '', latitude: lat, longitude: lng }],
+        fares: [...prev.fares, ''],
+        distances: [...prev.distances, distanceToNext]
+      }));
     }
   } else if (routeCreationMode === 'selecting') {
-    // In "select existing stops" mode, find and select the nearest existing stop
     handleSelectExistingStopFromMap(lat, lng);
   }
-  };
+};
   
   const handleSelectExistingStopFromMap = (lat, lng) => {
     // Find the nearest existing stop (within 0.01 degrees ~ 1km)
@@ -2542,160 +2589,301 @@ const findStopsUsingNominatim = async (region) => {
     });
   };
 
-  const handleRemovePlottedStop = (index) => {
-    setPlottedStops(prev => prev.filter((_, i) => i !== index));
-  };
+const handleRemovePlottedStop = (index) => {
+  const newPlottedStops = plottedStops.filter((_, i) => i !== index);
+  
+  // Recalculate distances for remaining stops
+  const updatedStops = newPlottedStops.map((stop, idx) => {
+    if (idx < newPlottedStops.length - 1) {
+      const nextStop = newPlottedStops[idx + 1];
+      const newDistance = calculateDistance(
+        stop.latitude,
+        stop.longitude,
+        nextStop.latitude,
+        nextStop.longitude
+      ).toFixed(2);
+      return { ...stop, distanceToNext: newDistance };
+    }
+    return { ...stop, distanceToNext: null }; // Last stop has no next
+  });
+  
+  setPlottedStops(updatedStops);
+  
+  // Also update newRoute state
+  setNewRoute(prev => {
+    const newStops = prev.stops.filter((_, i) => i !== index);
+    const newFares = prev.fares.filter((_, i) => i !== index);
+    const newDistances = updatedStops
+      .slice(0, -1)
+      .map(stop => stop.distanceToNext || '0.00');
+    
+    return {
+      ...prev,
+      stops: newStops,
+      fares: newFares,
+      distances: newDistances
+    };
+  });
+};
 
   const handleAddFare = (index, fare) => {
-    setPlottedStops(prev => {
-      const updated = [...prev];
-      if (index < updated.length - 1) {
-        updated[index] = {
-          ...updated[index],
-          fareToNext: fare
-        };
-      }
-      return updated;
-    });
-  };
-
-  const handleSavePlottedRoute = async () => {
-    if (plottedStops.length < 2) {
-      alert('Route must have at least 2 stops');
-      return;
+  setPlottedStops(prev => {
+    const updated = [...prev];
+    if (index < updated.length - 1) {
+      updated[index] = {
+        ...updated[index],
+        fareToNext: fare
+      };
+      
+      // Also update the newRoute state for compatibility
+      setNewRoute(prevRoute => {
+        const newFares = [...prevRoute.fares];
+        newFares[index] = fare;
+        return { ...prevRoute, fares: newFares };
+      });
     }
+    return updated;
+  });
+};
 
-    // Validate all new stops have names
-    const unnamedStops = plottedStops.filter(stop => stop.isNew && !stop.tempName);
-    if (unnamedStops.length > 0) {
-      alert('Please name all new stops');
-      return;
+// Update the handleSavePlottedRoute function
+const handleSavePlottedRoute = async () => {
+  console.log('Attempting to save route...', {
+    stopCount: plottedStops.length,
+    routeName: newRoute.name,
+    plottedStops: plottedStops
+  });
+
+  if (plottedStops.length < 2) {
+    alert('Route must have at least 2 stops');
+    return;
+  }
+
+  // Validate all new stops have names
+  const unnamedNewStops = plottedStops
+    .filter(stop => stop.isNew)
+    .filter(stop => !stop.tempName || stop.tempName.trim() === '');
+  
+  if (unnamedNewStops.length > 0) {
+    alert('Please name all new stops');
+    return;
+  }
+
+  // Validate fares - check if fares are set for all segments
+  const missingFares = [];
+  for (let i = 0; i < plottedStops.length - 1; i++) {
+    const fare = plottedStops[i].fareToNext;
+    console.log(`Segment ${i} fare:`, fare);
+    if (fare === undefined || fare === '' || fare === null || isNaN(parseFloat(fare))) {
+      missingFares.push(i + 1);
     }
+  }
+  
+  if (missingFares.length > 0) {
+    alert(`Please enter valid fares for segments: ${missingFares.join(', ')}`);
+    return;
+  }
 
-    // Validate fares
-    const missingFares = plottedStops.slice(0, -1).some((stop, index) => !stop.fareToNext);
-    if (missingFares) {
-      alert('Please enter fares for all segments');
-      return;
-    }
+  if (!newRoute.name || newRoute.name.trim() === '') {
+    alert('Please enter a route name');
+    return;
+  }
 
-    setIsLoading(true);
-    try {
-      // First, save any new stops to database
-      const newStopsToSave = plottedStops.filter(stop => stop.isNew);
-      let savedStops = [...stops];
+  console.log('All validations passed, proceeding to save...');
 
-      if (newStopsToSave.length > 0) {
-        const { data: savedStopData, error: stopError } = await supabase
-          .from('stops')
-          .insert(
-            newStopsToSave.map(stop => ({
-              name: stop.tempName,
-              latitude: stop.latitude,
-              longitude: stop.longitude
-            }))
-          )
-          .select();
+  setIsLoading(true);
+  try {
+    // First, save any new stops to database
+    const newStopsToSave = plottedStops.filter(stop => stop.isNew);
+    let savedStops = [...stops];
 
-        if (stopError) throw stopError;
-        
-        savedStops = [...savedStops, ...savedStopData];
-        setStops(savedStops);
-      }
-
-      // Create route with stops
-      const total_distance = plottedStops.reduce((sum, stop, index) => {
-        if (index < plottedStops.length - 1) {
-          return sum + (parseFloat(stop.distanceToNext) || 0);
-        }
-        return sum;
-      }, 0);
-
-      const total_fare = plottedStops.reduce((sum, stop) => {
-        return sum + (parseFloat(stop.fareToNext) || 0);
-      }, 0);
-
-      const { data: routeData, error: routeError } = await supabase
-        .from('routes')
-        .insert([{
-          name: newRoute.name,
-          total_distance,
-          total_fare,
-          description: newRoute.description || null,
-          travel_time_minutes: newRoute.travelTimeMinutes ? parseInt(newRoute.travelTimeMinutes) : null,
-          peak_hours: newRoute.peakHours || null,
-          frequency: newRoute.frequency || null,
-          vehicle_type: newRoute.vehicleType || null,
-          notes: newRoute.notes || null,
-          amenities: newRoute.amenities || [],
-          operating_hours: newRoute.operatingHours
-        }])
+    if (newStopsToSave.length > 0) {
+      console.log('Saving new stops:', newStopsToSave.length);
+      const { data: savedStopData, error: stopError } = await supabase
+        .from('stops')
+        .insert(
+          newStopsToSave.map(stop => ({
+            name: stop.tempName,
+            latitude: stop.latitude,
+            longitude: stop.longitude
+          }))
+        )
         .select();
 
-      if (routeError) throw routeError;
-
-      // Get stop IDs (existing or newly created)
-      const stopIds = plottedStops.map(plottedStop => {
-        if (plottedStop.isNew) {
-          const saved = savedStops.find(s => 
-            Math.abs(s.latitude - plottedStop.latitude) < 0.001 &&
-            Math.abs(s.longitude - plottedStop.longitude) < 0.001 &&
-            s.name === plottedStop.tempName
-          );
-          return saved?.id;
-        }
-        return plottedStop.id;
-      }).filter(id => id);
-
-      // Create route stops
-      const routeStops = stopIds.map((stopId, index) => ({
-        route_id: routeData[0].id,
-        stop_id: stopId,
-        stop_order: index,
-        fare_to_next: index < plottedStops.length - 1 ? parseFloat(plottedStops[index].fareToNext) : null,
-        distance_to_next: index < plottedStops.length - 1 ? parseFloat(plottedStops[index].distanceToNext) : null
-      }));
-
-      const { error: stopsError } = await supabase
-        .from('route_stops')
-        .insert(routeStops);
-
-      if (stopsError) throw stopsError;
-
-      alert('Route created successfully!');
+      if (stopError) {
+        console.error('Error saving stops:', stopError);
+        throw stopError;
+      }
       
-      // Reset everything
-      setRouteCreationMode(null);
-      setPlottedStops([]);
-      setNewRoute({
-        name: '',
-        stops: [],
-        fares: [],
-        distances: [],
-        description: '',
-        travelTimeMinutes: '',
-        peakHours: '',
-        frequency: '',
-        vehicleType: '',
-        notes: '',
-        amenities: [],
-        operatingHours: {
-          start: '06:00',
-          end: '22:00',
-          days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        }
-      });
-      
-      loadRoutes();
-      loadStops();
-
-    } catch (error) {
-      console.error('Error creating route:', error);
-      alert('Failed to create route: ' + error.message);
-    } finally {
-      setIsLoading(false);
+      savedStops = [...savedStops, ...savedStopData];
+      setStops(savedStops);
+      console.log('New stops saved successfully');
     }
-  };
+
+    // Get stop IDs (existing or newly created)
+    const stopIds = plottedStops.map(plottedStop => {
+      if (plottedStop.isNew) {
+        const saved = savedStops.find(s => 
+          Math.abs(s.latitude - plottedStop.latitude) < 0.001 &&
+          Math.abs(s.longitude - plottedStop.longitude) < 0.001 &&
+          s.name === plottedStop.tempName
+        );
+        return saved?.id;
+      }
+      return plottedStop.id;
+    }).filter(id => id);
+
+    if (stopIds.length !== plottedStops.length) {
+      console.error('Stop ID mismatch:', { stopIds, plottedStops });
+      throw new Error('Could not find all stops in database');
+    }
+
+    // Get the actual stop objects
+    const finalStops = stopIds.map(id => savedStops.find(s => s.id === id)).filter(Boolean);
+
+    // Create main route
+    const mainRoute = {
+      stops: finalStops,
+      fares: plottedStops.slice(0, -1).map(stop => parseFloat(stop.fareToNext)),
+      distances: plottedStops.slice(0, -1).map(stop => parseFloat(stop.distanceToNext) || 0)
+    };
+
+    console.log('Main route created:', mainRoute);
+
+    // Generate all possible sub-routes
+    const allRoutesToSave = [mainRoute];
+    
+    // Generate sub-routes (skip if only 2 stops)
+    if (finalStops.length > 2) {
+      console.log('Generating sub-routes for', finalStops.length, 'stops');
+      
+      // Generate all combinations
+      for (let startIndex = 0; startIndex < finalStops.length - 1; startIndex++) {
+        for (let endIndex = startIndex + 2; endIndex <= finalStops.length; endIndex++) {
+          const subRouteStops = finalStops.slice(startIndex, endIndex);
+          
+          // Only create if at least 2 stops
+          if (subRouteStops.length >= 2) {
+            const subRouteFares = [];
+            const subRouteDistances = [];
+            
+            // Get fares and distances from the corresponding segments
+            for (let i = startIndex; i < endIndex - 1; i++) {
+              const fare = mainRoute.fares[i] || 0;
+              const distance = mainRoute.distances[i] || 0;
+              subRouteFares.push(fare);
+              subRouteDistances.push(distance);
+            }
+            
+            allRoutesToSave.push({
+              stops: subRouteStops,
+              fares: subRouteFares,
+              distances: subRouteDistances,
+              isSubRoute: true
+            });
+          }
+        }
+      }
+    }
+
+    console.log('Total routes to save:', allRoutesToSave.length);
+
+    // Save all routes to database
+    let savedCount = 0;
+    let errors = [];
+    
+    for (const route of allRoutesToSave) {
+      try {
+        await saveRouteToDatabase(route);
+        savedCount++;
+      } catch (error) {
+        console.error('Error saving route:', error);
+        errors.push(error.message);
+      }
+    }
+
+    if (errors.length > 0) {
+      console.warn('Some routes failed to save:', errors);
+    }
+
+    alert(`Successfully created ${savedCount} route(s)! ${errors.length > 0 ? `(${errors.length} failed)` : ''}`);
+
+    // Reset everything
+    setRouteCreationMode(null);
+    setPlottedStops([]);
+    setNewRoute({
+      name: '',
+      stops: [],
+      fares: [],
+      distances: [],
+      description: '',
+      travelTimeMinutes: '',
+      peakHours: '',
+      frequency: '',
+      vehicleType: '',
+      notes: '',
+      amenities: [],
+      operatingHours: {
+        start: '06:00',
+        end: '22:00',
+        days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      }
+    });
+    
+    loadRoutes();
+    loadStops();
+
+  } catch (error) {
+    console.error('Error creating route:', error);
+    alert('Failed to create route: ' + error.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const generateAllSubRoutes = (mainRoute) => {
+  const allRoutes = [mainRoute];
+  const stops = mainRoute.stops;
+  
+  if (stops.length <= 2) {
+    return allRoutes; // No sub-routes if only 2 stops
+  }
+  
+  // Generate all possible combinations of stops
+  for (let startIndex = 0; startIndex < stops.length - 1; startIndex++) {
+    for (let endIndex = startIndex + 2; endIndex <= stops.length; endIndex++) {
+      const subRouteStops = stops.slice(startIndex, endIndex);
+      
+      // Calculate fares and distances for this sub-route
+      const subRouteFares = [];
+      const subRouteDistances = [];
+      
+      for (let i = startIndex; i < endIndex - 1; i++) {
+        const fare = mainRoute.fares[i];
+        const distance = mainRoute.distances[i];
+        subRouteFares.push(fare);
+        subRouteDistances.push(distance);
+      }
+      
+      // Only add if it's a valid sub-route (at least 2 stops)
+      if (subRouteStops.length >= 2) {
+        allRoutes.push({
+          stops: subRouteStops,
+          fares: subRouteFares,
+          distances: subRouteDistances,
+          isSubRoute: true,
+          parentStartIndex: startIndex,
+          parentEndIndex: endIndex
+        });
+      }
+    }
+  }
+  
+  console.log(`Generated ${allRoutes.length} routes from ${stops.length} stops`);
+  return allRoutes;
+};
+
+
 
   // Load functions
   const loadStops = async () => {
@@ -4704,26 +4892,54 @@ const removeDuplicateRoutes = (routes) => {
   return unique;
 };
   
-  const handleStopClickFromMap = (stop) => {
+const handleStopClickFromMap = (stop) => {
   if (routeCreationMode === 'selecting') {
     // Check if stop is already in the route
     const isAlreadyAdded = plottedStops.some(s => !s.isNew && s.id === stop.id);
     
     if (!isAlreadyAdded) {
+      // Calculate distance to previous stop
+      const distanceToNext = calculateDistanceToNext(plottedStops, stop);
+      
+      console.log('Adding stop with distance:', distanceToNext, 'km');
+      
       // Add the existing stop to the route
-      setPlottedStops(prev => [...prev, {
+      const updatedPlottedStops = [...plottedStops, {
         ...stop,
         isNew: false,
-        distanceToNext: calculateDistanceToNext(prev, stop)
-      }]);
+        distanceToNext: distanceToNext,
+        fareToNext: '' // Empty fare that user needs to fill
+      }];
       
-      // Show feedback
-      console.log(`Added "${stop.name}" to route`);
+      setPlottedStops(updatedPlottedStops);
+      
+      // Also update distances for all previous stops if needed
+      if (updatedPlottedStops.length > 1) {
+        // Update the previous stop's distance
+        const updatedWithDistances = [...updatedPlottedStops];
+        const prevStopIndex = updatedWithDistances.length - 2;
+        updatedWithDistances[prevStopIndex] = {
+          ...updatedWithDistances[prevStopIndex],
+          distanceToNext: distanceToNext
+        };
+        setPlottedStops(updatedWithDistances);
+      }
+      
+      // Update newRoute state for compatibility
+      setNewRoute(prev => ({
+        ...prev,
+        stops: [...prev.stops, stop],
+        fares: [...prev.fares, ''],
+        distances: [...prev.distances, distanceToNext || '0.00']
+      }));
+      
+      console.log(`Added "${stop.name}" to route with distance ${distanceToNext}km`);
     } else {
       alert(`"${stop.name}" is already in your route`);
     }
   }
 };
+
 
 // Create direct route between two stops
 const createDirectRoute = (startStop, destinationStop) => {
@@ -4970,43 +5186,78 @@ const handleShowRouteSelection = (routes) => {
 
 
   // NEW: Save route to database helper
-  const saveRouteToDatabase = async (route, routeName) => {
-    const total_distance = calculateRouteDistance(route.stops);
-    const total_fare = route.fares.reduce((sum, fare) => sum + parseFloat(fare || 0), 0);
+const saveRouteToDatabase = async (route) => {
+  // Calculate total distance and fare
+  const total_distance = route.distances.reduce((sum, dist) => {
+    const distance = parseFloat(dist) || 0;
+    return sum + distance;
+  }, 0);
+  
+  const total_fare = route.fares.reduce((sum, fare) => {
+    const fareValue = parseFloat(fare) || 0;
+    return sum + fareValue;
+  }, 0);
 
-    // Insert route
-    const { data: routeData, error: routeError } = await supabase
-      .from('routes')
-      .insert([{
-        name: routeName,
-        total_distance,
-        total_fare
-      }])
-      .select();
+  // Generate a descriptive route name
+  const routeName = route.stops.length === 2 
+    ? `${route.stops[0].name} to ${route.stops[1].name}`
+    : `${route.stops[0].name} to ${route.stops[route.stops.length - 1].name} via ${route.stops.length - 2} stops`;
 
-    if (routeError) throw routeError;
+  console.log('Saving route:', {
+    name: routeName,
+    stops: route.stops.length,
+    total_distance,
+    total_fare,
+    distances: route.distances,
+    fares: route.fares
+  });
 
-    // Insert route stops
-    const routeStops = route.stops.map((stop, index) => ({
-      route_id: routeData[0].id,
-      stop_id: stop.id,
-      stop_order: index,
-      fare_to_next: index < route.fares.length ? parseFloat(route.fares[index]) : null,
-      distance_to_next: index < route.stops.length - 1 ? 
-        calculateDistance(
-          stop.latitude,
-          stop.longitude,
-          route.stops[index + 1].latitude,
-          route.stops[index + 1].longitude
-        ) : null
-    }));
+  // Insert route
+  const { data: routeData, error: routeError } = await supabase
+    .from('routes')
+    .insert([{
+      name: routeName,
+      total_distance,
+      total_fare,
+      description: newRoute.description || null,
+      travel_time_minutes: newRoute.travelTimeMinutes ? parseInt(newRoute.travelTimeMinutes) : null,
+      peak_hours: newRoute.peakHours || null,
+      frequency: newRoute.frequency || null,
+      vehicle_type: newRoute.vehicleType || null,
+      notes: newRoute.notes || null,
+      amenities: newRoute.amenities.length > 0 ? newRoute.amenities : null,
+      operating_hours: newRoute.operatingHours
+    }])
+    .select();
 
-    const { error: stopsError } = await supabase
-      .from('route_stops')
-      .insert(routeStops);
+  if (routeError) {
+    console.error('Error saving route to database:', routeError);
+    throw routeError;
+  }
 
-    if (stopsError) throw stopsError;
-  };
+  // Insert route stops with distances
+  const routeStops = route.stops.map((stop, index) => ({
+    route_id: routeData[0].id,
+    stop_id: stop.id,
+    stop_order: index,
+    fare_to_next: index < route.fares.length ? parseFloat(route.fares[index]) : null,
+    distance_to_next: index < route.distances.length ? parseFloat(route.distances[index]) : null
+  }));
+
+  console.log('Saving route stops:', routeStops);
+
+  const { error: stopsError } = await supabase
+    .from('route_stops')
+    .insert(routeStops);
+
+  if (stopsError) {
+    console.error('Error saving route stops:', stopsError);
+    throw stopsError;
+  }
+  
+  return routeData[0];
+};
+
 
   const toggleBottomSheet = () => {
     setShowBottomSheet(!showBottomSheet);
@@ -5344,6 +5595,8 @@ return (
                     onRouteNameChange={(text) => setNewRoute(prev => ({ ...prev, name: text }))}
                     onSelectExistingStop={() => setRouteCreationMode('selecting')}
                     isSelectingExisting={routeCreationMode === 'selecting'}
+                    showRoutePaths={showRoutePaths}
+                    onToggleRoutePaths={() => setShowRoutePaths(!showRoutePaths)}
                     routeInfo={{
                       description: newRoute.description,
                       travelTimeMinutes: newRoute.travelTimeMinutes,

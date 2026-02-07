@@ -43,55 +43,89 @@ const createCustomIcon = (color = '#6b21a8', isSelected = false, isPreview = fal
 // Routing Control Component
 function RoutingControl({ waypoints, routeColor = '#6b21a8', showRoute }) {
   const map = useMap();
-  const [routingControl, setRoutingControl] = useState(null);
+  const routingControlRef = useRef(null);
 
   useEffect(() => {
     if (!showRoute || waypoints.length < 2) {
-      if (routingControl) {
-        map.removeControl(routingControl);
-        setRoutingControl(null);
+      if (routingControlRef.current) {
+        try {
+          map.removeControl(routingControlRef.current);
+        } catch (error) {
+          console.warn('Error removing routing control:', error);
+        }
+        routingControlRef.current = null;
       }
       return;
     }
 
-    // Create routing control
-    const control = L.Routing.control({
-      waypoints: waypoints.map(wp => L.latLng(wp.lat, wp.lng)),
-      routeWhileDragging: false,
-      showAlternatives: false,
-      fitSelectedRoutes: true,
-      show: false, // Hide the instructions panel
-      lineOptions: {
-        styles: [
-          {
-            color: routeColor,
-            opacity: 0.8,
-            weight: 6
-          }
-        ],
-        extendToWaypoints: true,
-        missingRouteTolerance: 10
-      },
-      createMarker: function(i, wp) {
-        // Don't create default markers since we have our own
-        return null;
-      },
-      router: L.Routing.osrmv1({
-        serviceUrl: 'https://router.project-osrm.org/route/v1',
-        profile: 'driving'
-      })
-    }).addTo(map);
+    // Clean up existing control
+    if (routingControlRef.current) {
+      try {
+        map.removeControl(routingControlRef.current);
+      } catch (error) {
+        console.warn('Error removing existing routing control:', error);
+      }
+    }
 
-    // Handle routing errors
-    control.on('routingerror', function(e) {
-      console.error('Routing error:', e.error);
-    });
+    // Create new routing control
+    try {
+      const control = L.Routing.control({
+        waypoints: waypoints.map(wp => L.latLng(wp.lat, wp.lng)),
+        routeWhileDragging: false,
+        showAlternatives: false,
+        fitSelectedRoutes: false, // Changed to false to prevent map movement
+        show: false,
+        lineOptions: {
+          styles: [
+            {
+              color: routeColor,
+              opacity: 0.8,
+              weight: 6
+            }
+          ],
+          extendToWaypoints: true,
+          missingRouteTolerance: 10
+        },
+        createMarker: function(i, wp) {
+          return null; // Don't create default markers
+        },
+        router: L.Routing.osrmv1({
+          serviceUrl: 'https://router.project-osrm.org/route/v1',
+          profile: 'driving',
+          timeout: 10000 // 10 second timeout
+        })
+      }).addTo(map);
 
-    setRoutingControl(control);
+      // Handle routing errors gracefully
+      control.on('routingerror', function(e) {
+        console.warn('Routing error (non-critical):', e.error);
+        // Don't show error to user, just log it
+      });
+
+      routingControlRef.current = control;
+
+      // Fit bounds to show entire route
+      setTimeout(() => {
+        try {
+          const bounds = L.latLngBounds(waypoints.map(wp => [wp.lat, wp.lng]));
+          map.fitBounds(bounds.pad(0.1));
+        } catch (error) {
+          console.warn('Error fitting bounds:', error);
+        }
+      }, 100);
+
+    } catch (error) {
+      console.error('Error creating routing control:', error);
+    }
 
     return () => {
-      if (control) {
-        map.removeControl(control);
+      if (routingControlRef.current) {
+        try {
+          map.removeControl(routingControlRef.current);
+          routingControlRef.current = null;
+        } catch (error) {
+          console.warn('Error cleaning up routing control:', error);
+        }
       }
     };
   }, [map, waypoints, showRoute, routeColor]);
@@ -340,7 +374,7 @@ const MapComponent = ({
           <Marker
             position={[previewStop.latitude, previewStop.longitude]}
             icon={createCustomIcon(
-              previewStop.source === 'amenity' ? '#10B981' : '#3B82F6', 
+              previewStop.source === 'amenity' ? '#10B981' : '#6b21a8', 
               false, 
               true
             )}
@@ -501,7 +535,7 @@ const Polyline = ({ positions, color, opacity, weight, dashArray }) => {
     }).addTo(map);
     
     return () => {
-      map.removeLayer(polyline);
+      //map.removeLayer(polyline);
     };
   }, [map, positions, color, opacity, weight, dashArray]);
   

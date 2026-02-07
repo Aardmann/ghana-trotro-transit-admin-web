@@ -1,7 +1,8 @@
 import React from 'react';
-import { MapPin, Search, AlertCircle, X, Plus, Route, Eye, EyeOff } from 'lucide-react';
+import { MapPin, Search, AlertCircle, X, Plus, Route, Eye, EyeOff, Info, CheckCircle } from 'lucide-react';
 import RouteInfoForm from './RouteInfoForm';
 
+// Update the component to better handle validation
 const RouteCreationWithMap = ({
   onCancel,
   onSave,
@@ -26,8 +27,8 @@ const RouteCreationWithMap = ({
   onSearchChange,
   searchResults = [],
   onAddStopFromSearch,
-  showRoutePaths = true, // New prop
-  onToggleRoutePaths = () => {} // New prop
+  showRoutePaths = true,
+  onToggleRoutePaths = () => {}
 }) => {
   
   // Calculate total route distance
@@ -39,6 +40,46 @@ const RouteCreationWithMap = ({
       }
     });
     return total.toFixed(2);
+  };
+
+  // Calculate total fare
+  const calculateTotalFare = () => {
+    let total = 0;
+    plottedStops.forEach((stop) => {
+      if (stop.fareToNext) {
+        total += parseFloat(stop.fareToNext) || 0;
+      }
+    });
+    return total.toFixed(2);
+  };
+
+  // Check if all fares are filled
+  const areAllFaresFilled = () => {
+    if (plottedStops.length < 2) return false;
+    
+    for (let i = 0; i < plottedStops.length - 1; i++) {
+      const fare = plottedStops[i].fareToNext;
+      if (!fare || fare === '' || fare === null || fare === undefined) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Check if all new stops are named
+  const areAllNewStopsNamed = () => {
+    const newStops = plottedStops.filter(stop => stop.isNew);
+    return newStops.every(stop => stop.tempName && stop.tempName.trim() !== '');
+  };
+
+  // Check if route can be saved
+  const canSaveRoute = () => {
+    return !isLoading && 
+           plottedStops.length >= 2 && 
+           routeName && 
+           routeName.trim() !== '' &&
+           areAllFaresFilled() &&
+           areAllNewStopsNamed();
   };
 
   return (
@@ -74,7 +115,7 @@ const RouteCreationWithMap = ({
         {plottedStops.length >= 2 && (
           <span className="route-distance-badge">
             <Route size={14} />
-            {calculateTotalDistance()} km
+            {calculateTotalDistance()} km • GH₵ {calculateTotalFare()}
           </span>
         )}
       </h3>
@@ -156,12 +197,13 @@ const RouteCreationWithMap = ({
                 {index < plottedStops.length - 1 && (
                   <div className="fare-input-container">
                     <input
-                      className="fare-input"
+                      className={`fare-input ${stop.fareToNext ? 'fare-filled' : 'fare-empty'}`}
                       placeholder="Fare to next (GH₵)"
                       value={stop.fareToNext || ''}
                       onChange={(e) => onAddFare(index, e.target.value)}
                       type="number"
                       step="0.01"
+                      min="0"
                     />
                     <span className="distance-text">
                       {stop.distanceToNext ? `${stop.distanceToNext} km` : 'Calculating...'}
@@ -184,6 +226,32 @@ const RouteCreationWithMap = ({
         </div>
       )}
 
+      {/* Validation Messages */}
+      {plottedStops.length >= 2 && (
+        <div className="validation-messages">
+          {!areAllFaresFilled() && (
+            <div className="validation-error">
+              <AlertCircle size={14} />
+              Please fill fares for all segments between stops
+            </div>
+          )}
+          
+          {!areAllNewStopsNamed() && (
+            <div className="validation-error">
+              <AlertCircle size={14} />
+              Please name all new stops
+            </div>
+          )}
+          
+                  {/* {areAllFaresFilled() && areAllNewStopsNamed() && plottedStops.length >= 2 && (
+            <div className="validation-success">
+              <CheckCircle size={14} />
+              Ready to create route! All {plottedStops.length} stops will be saved with all possible sub-routes.
+            </div>
+          )} */}
+        </div>
+      )}
+
       <div className="plotting-instructions">
         {isSelectingExisting ? (
           <>
@@ -193,12 +261,6 @@ const RouteCreationWithMap = ({
                 Search for stops or click on them on the map
               </span>
             </div>
-            <div className="instruction-item">
-              <AlertCircle size={16} color="#F59E0B" />
-              <span className="instruction-text">
-                Road routes will be displayed between stops
-              </span>
-            </div>
           </>
         ) : (
           <>
@@ -206,12 +268,6 @@ const RouteCreationWithMap = ({
               <MapPin size={16} color="#6b21a8" />
               <span className="instruction-text">
                 Click anywhere on the map to add stops
-              </span>
-            </div>
-            <div className="instruction-item">
-              <AlertCircle size={16} color="#F59E0B" />
-              <span className="instruction-text">
-                Real road routing will connect your stops automatically
               </span>
             </div>
           </>
@@ -237,11 +293,22 @@ const RouteCreationWithMap = ({
         </button>
         
         <button 
-          className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
+          className={`save-button ${!canSaveRoute() ? 'save-button-disabled' : ''}`}
           onClick={onSave}
-          disabled={isLoading || plottedStops.length < 2 || !routeName}
+          disabled={!canSaveRoute()}
         >
-          {isLoading ? <div className="spinner"></div> : 'Create Route'}
+          {isLoading ? (
+            <div className="spinner"></div>
+          ) : (
+            <>
+              Create Route
+              {plottedStops.length > 2 && (
+                <span className="route-count-badge">
+                  +{Math.pow(2, plottedStops.length) - plottedStops.length - 1} sub-routes
+                </span>
+              )}
+            </>
+          )}
         </button>
       </div>
     </div>
