@@ -1152,7 +1152,7 @@ const EnhancedRouteFinder = ({
           onClick={() => onToggleAutomaticMode(false)}
         >
           <MapPin size={16} />
-          Manual Search
+          Auto Search
         </button>
         <button
           className={`mode-button ${automaticMode ? 'mode-active' : ''}`}
@@ -1311,18 +1311,18 @@ const EnhancedRouteFinder = ({
         <>
           <p className="form-subtitle">Automatically discover routes based on your parameters</p>
           
-          <div className="auto-info-card">
+            {/* <div className="auto-info-card">
             <div className="auto-info-icon">
               <Route size={24} color="#10b981" />
             </div>
             <div className="auto-info-content">
               <h4 className="auto-info-title">Automatic Route Discovery</h4>
-              <p className="auto-info-text">
+                <p className="auto-info-text">
                 The system will automatically generate routes between popular stops in the selected region 
                 based on your configuration below. No need to specify start and end points!
-              </p>
+              </p> 
             </div>
-          </div>
+          </div>*/}
         </>
       )}
 
@@ -1475,9 +1475,12 @@ const EnhancedRouteFinder = ({
             onClick={onFindRoutes}
             disabled={isLoading || startPoints.filter(p => p.trim()).length === 0 || destinationPoints.filter(p => p.trim()).length === 0}
           >
-            {isLoading ? <div className="spinner"></div> : 
-              hasCachedResults ? 'Reload Routes (500 max)' : 'Find Routes (500 max)'
-            }
+              {isLoading ? <div className="spinner"></div> : ( 
+                <>
+                <MapPin size={20} />
+              {hasCachedResults ? 'Reload Routes (500 max)' : 'Find Routes (500 max)'}
+                </>
+              )}
           </button>
         )}
       </div>
@@ -5326,7 +5329,10 @@ return (
             <div className="user-info-header">
               <div className="user-welcome">
                 Welcome, <span className="user-email">{user?.email}</span>
-              </div>
+            </div>
+            <button className="close-button" onClick={toggleBottomSheet}>
+                <X size={30} />
+              </button>
               <div className="tab-container">
                 <button 
                   className={`tab ${activeSection === 'stops' ? 'active-tab' : ''}`}
@@ -5351,9 +5357,6 @@ return (
                   Routes
                 </button>
               </div>
-              <button className="close-button" onClick={toggleBottomSheet}>
-                <X size={20} />
-              </button>
             </div>
           </div>
 
@@ -5515,7 +5518,10 @@ return (
                   <StopForm
                     newStop={newStop}
                     onStopNameChange={(text) => setNewStop(prev => ({ ...prev, name: text }))}
-                    onSelectLocation={() => setIsSelectingLocation(true)}
+                      onSelectLocation={() => {
+                        setIsSelectingLocation(true)
+                        toggleBottomSheet(false);
+                    }}
                     onAddStop={handleAddStop}
                     onCancel={() => setNewStop({ name: '', latitude: null, longitude: null })}
                     isLoading={isLoading}
@@ -6071,6 +6077,7 @@ return (
             onClick={() => {
               setIsSelectingLocation(false);
               if (editingStop) setEditingStop(null);
+              toggleBottomSheet(true); 
             }}
           >
             Cancel Selection

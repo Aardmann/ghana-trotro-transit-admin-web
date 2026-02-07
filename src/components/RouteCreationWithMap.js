@@ -252,7 +252,7 @@ const RouteCreationWithMap = ({
         </div>
       )}
 
-      <div className="plotting-instructions">
+      {/*<div className="plotting-instructions">
         {isSelectingExisting ? (
           <>
             <div className="instruction-item">
@@ -272,7 +272,7 @@ const RouteCreationWithMap = ({
             </div>
           </>
         )}
-      </div>
+      </div> */}
 
       {plottedStops.length >= 2 && (
         <RouteInfoForm
