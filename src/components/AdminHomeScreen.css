@@ -163,9 +163,7 @@ body {
 .bottom-sheet {
   position: fixed;
   top: 0;
-  right: -100%;
-  width: 100%;
-  max-width: 500px;
+  right: -100vw;
   height: 100vh;
   background: var(--background);
   box-shadow: var(--shadow-lg);
@@ -173,6 +171,7 @@ body {
   transition: right 0.3s ease-in-out;
   display: flex;
   flex-direction: column;
+  min-width: 320px;
 }
 
 .bottom-sheet.slide-in {
@@ -180,7 +179,42 @@ body {
 }
 
 .bottom-sheet.slide-out {
-  right: -100%;
+  right: -100vw;
+}
+
+/* Resize Handle */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover {
+  background: rgba(107, 33, 168, 0.08);
+}
+
+.resize-handle:hover .resize-handle-bar,
+.resize-handle:active .resize-handle-bar {
+  background: var(--primary);
+  opacity: 1;
+}
+
+.resize-handle-bar {
+  width: 3px;
+  height: 80px;
+  border-radius: 3px;
+  background: var(--border);
+  opacity: 0.6;
+  transition: all 0.2s;
 }
 
 .bottom-sheet-header {
@@ -2888,7 +2922,6 @@ body {
 
 .instruction-text {
   font-size: 14px;
-  color: #0369a1;
 }
 
 /* Add to AdminHomeScreen.css */

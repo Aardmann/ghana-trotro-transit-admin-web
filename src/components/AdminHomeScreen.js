@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './AdminHomeScreen.css';
 import MapComponent from './MapComponent';
 import { MAP_CONFIG } from '../utils/constants';
@@ -545,17 +545,7 @@ const RouteForm = ({
 }) => {
   return (
     <div className="form-container">
-      <h2 className="form-title">Create New Route</h2>
-      
-      <button 
-        className="route-finder-button"
-        onClick={onOpenRouteFinder}
-      >
-        <Route size={20} />
-        Find Routes Automatically
-      </button>
-      
-      <p className="divider-text">OR</p>
+      <h2 className="form-title">Create New Route Manually</h2>
       
       <div className="input-group">
         <input
@@ -1521,6 +1511,10 @@ const AdminHomeScreen = () => {
   // Bottom sheet state
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [activeSection, setActiveSection] = useState('stops');
+  const [sheetWidth, setSheetWidth] = useState(500);
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
 
   // Stop editing state
   const [editingStop, setEditingStop] = useState(null);
@@ -5275,6 +5269,34 @@ const saveRouteToDatabase = async (route) => {
     }
   };
 
+  const handleResizeMouseDown = useCallback((e) => {
+    isResizing.current = true;
+    startX.current = e.clientX;
+    startWidth.current = sheetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (e) => {
+      if (!isResizing.current) return;
+      const delta = startX.current - e.clientX;
+      const newWidth = startWidth.current + delta;
+      const minWidth = 320;
+      const maxWidth = Math.floor(window.innerWidth * 0.5);
+      setSheetWidth(Math.min(maxWidth, Math.max(minWidth, newWidth)));
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [sheetWidth]);
+
   if (showAuth) {
   return (
     <AuthForm
@@ -5324,7 +5346,13 @@ return (
       </div>
 
       {showBottomSheet && (
-        <div className={`bottom-sheet ${showBottomSheet ? 'slide-in' : 'slide-out'}`}>
+        <div
+          className={`bottom-sheet ${showBottomSheet ? 'slide-in' : 'slide-out'}`}
+          style={{ width: sheetWidth }}
+        >
+          <div className="resize-handle" onMouseDown={handleResizeMouseDown}>
+            <div className="resize-handle-bar" />
+          </div>
           <div className="bottom-sheet-header">
             <div className="user-info-header">
               <div className="user-welcome">
@@ -5818,6 +5846,7 @@ return (
                 ) : (
                   <div>
                     <div className="route-creation-options">
+                      <h2 className="form-title">Select Route Creation Method</h2>
                       <button 
                         className="creation-option-button"
                         onClick={() => handleStartRouteCreation('plotting')}
@@ -5851,6 +5880,8 @@ return (
                         </div>
                       </button>
                     </div>
+
+                    <p className="divider-text">OR</p>
                     
                     <RouteForm
                       newRoute={newRoute}
