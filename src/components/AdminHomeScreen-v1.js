@@ -1612,12 +1612,6 @@ const AdminHomeScreen = () => {
 
   const [showRoutePaths, setShowRoutePaths] = useState(true);
 
-  const [hoveredRouteId, setHoveredRouteId] = useState(null);
-  const [selectedRouteId, setSelectedRouteId] = useState(null);
-  const [hoveredStopId,  setHoveredStopId]  = useState(null);
-  const [selectedStopId, setSelectedStopId] = useState(null);
-
-
   // Filter stops based on match whole word setting
   const filterStopsByName = (stopsList, query, wholeWord = false) => {
     if (!query.trim()) return stopsList;
@@ -3147,16 +3141,6 @@ const handleForgotPassword = async () => {
       fares: newFares,
       distances: newDistances
     }));
-  };
-
-  const formatTravelTime = (minutes) => {
-    if (!minutes || isNaN(minutes)) return null;
-    const m = parseInt(minutes, 10);
-    const h = Math.floor(m / 60);
-    const rem = m % 60;
-    if (h === 0) return `${rem}m`;
-    if (rem === 0) return `${h}h`;
-    return `${h}h ${rem}m`;
   };
 
 const handleAddRoute = async () => {
@@ -5330,14 +5314,13 @@ const saveRouteToDatabase = async (route) => {
 return (
     <div className="container">
       <div className="map-container">
-          <MapComponent
+          <MapComponent 
             center={MAP_CONFIG.center}
             stops={stops}
-            routes={routes}
             searchedLocation={searchedLocation}
             selectedStop={editingStop || (newStop.latitude ? newStop : null)}
-            previewStop={previewStop}
-            panToLocation={panToLocation}
+            previewStop={previewStop} 
+            panToLocation={panToLocation} 
             onMapPress={(lat, lng) => {
               if (routeCreationMode === 'plotting') {
                 handleMapPressForRoute(lat, lng);
@@ -5350,10 +5333,6 @@ return (
             routeCreationMode={routeCreationMode}
             onStopClick={handleStopClickFromMap}
             showRoutePaths={showRoutePaths && routeCreationMode !== null}
-            hoveredRouteId={hoveredRouteId}
-            selectedRouteId={selectedRouteId}
-            hoveredStopId={hoveredStopId}
-            selectedStopId={selectedStopId}
           />
       </div>
 
@@ -5601,59 +5580,28 @@ return (
                   </div>
                   <div className="items-container">
                     {filteredStops.map((stop) => (
-                      <React.Fragment key={stop.id}>
-                        <div
-                          className={`item-card${selectedStopId === stop.id ? ' stop-card-selected' : hoveredStopId === stop.id ? ' stop-card-hovered' : ''}`}
-                          onMouseEnter={() => setHoveredStopId(stop.id)}
-                          onMouseLeave={() => setHoveredStopId(null)}
-                          onClick={() => setSelectedStopId(prev => prev === stop.id ? null : stop.id)}
-                          style={{ cursor: 'pointer', userSelect: 'none' }}
-                        >
-                          <div className="item-info">
-                            <h4 className="item-name">{stop.name}</h4>
-                            <p className="item-coordinates">
-                              {stop.latitude.toFixed(6)}, {stop.longitude.toFixed(6)}
-                            </p>
-                          </div>
-                          <div className="item-actions">
-                            <button
-                              className="edit-button"
-                              onClick={(e) => { e.stopPropagation(); handleEditStop(stop); }}
-                            >
-                              <Edit3 size={16} />
-                            </button>
-                            <button
-                              className="delete-button"
-                              onClick={(e) => { e.stopPropagation(); handleDeleteStop(stop.id); }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                      <div key={stop.id} className="item-card">
+                        <div className="item-info">
+                          <h4 className="item-name">{stop.name}</h4>
+                          <p className="item-coordinates">
+                            {stop.latitude.toFixed(6)}, {stop.longitude.toFixed(6)}
+                          </p>
                         </div>
-                  
-                        {/* ── Stop detail panel (shown when stop is clicked/selected) ── */}
-                        {selectedStopId === stop.id && (
-                          <div className="stop-highlight-panel">
-                            <div className="route-highlight-panel-header">
-                              <MapPin size={14} color="#6b21a8" />
-                              <span className="route-highlight-panel-title">{stop.name}</span>
-                              <button
-                                className="route-highlight-panel-close"
-                                onClick={(e) => { e.stopPropagation(); setSelectedStopId(null); }}
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                            <div className="stop-highlight-coord">
-                              <div>📍 Latitude:  {stop.latitude.toFixed(7)}</div>
-                              <div>📍 Longitude: {stop.longitude.toFixed(7)}</div>
-                            </div>
-                            <p className="stop-highlight-hint">
-                              Stop is highlighted on the map. All other stops are hidden. Click the card again to deselect.
-                            </p>
-                          </div>
-                        )}
-                      </React.Fragment>
+                        <div className="item-actions">
+                          <button 
+                            className="edit-button"
+                            onClick={() => handleEditStop(stop)}
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button 
+                            className="delete-button"
+                            onClick={() => handleDeleteStop(stop.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -6033,212 +5981,91 @@ return (
                     </div>
                     <div className="items-container">
                       {filteredRoutes.map((route) => (
-                        <React.Fragment key={route.id}>
-                          <div
-                            className={`item-card route-card${selectedRouteId === route.id ? ' route-card-selected' : hoveredRouteId === route.id ? ' route-card-hovered' : ''}`}
-                            onMouseEnter={() => setHoveredRouteId(route.id)}
-                            onMouseLeave={() => setHoveredRouteId(null)}
-                            onClick={() => setSelectedRouteId(prev => prev === route.id ? null : route.id)}
-                            style={{ cursor: 'pointer', userSelect: 'none' }}
-                          >
-                            <div className="item-info">
-                              <h4 className="item-name">{route.name}</h4>
-                    
-                              {route.description && (
-                                <p className="item-description">{route.description}</p>
+                        <div key={route.id} className="item-card route-card">
+                          <div className="item-info">
+                            <h4 className="item-name">{route.name}</h4>
+                            
+                            {route.description && (
+                              <p className="item-description">{route.description}</p>
+                            )}
+                            
+                            <div className="route-details-grid">
+                              <div className="detail-item">
+                                <span className="detail-label">
+                                  <MapPin size={12} />
+                                  Stops:
+                                </span>
+                                <span className="detail-value">{route.route_stops?.length || 0}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">
+                                  <Clock size={12} />
+                                  Fare:
+                                </span>
+                                <span className="detail-value">GH₵ {route.total_fare}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">
+                                  <Route size={12} />
+                                  Distance:
+                                </span>
+                                <span className="detail-value">{route.total_distance}km</span>
+                              </div>
+                              {route.travel_time_minutes && (
+                                <div className="detail-item">
+                                  <span className="detail-label">
+                                    <Clock size={12} />
+                                    Time:
+                                  </span>
+                                  <span className="detail-value">{route.travel_time_minutes} min</span>
+                                </div>
                               )}
-                    
-                              <div className="route-details-grid">
-                                <div className="detail-item">
-                                  <span className="detail-label"><MapPin size={12} />Stops:</span>
-                                  <span className="detail-value">{route.route_stops?.length || 0}</span>
-                                </div>
-                                <div className="detail-item">
-                                  <span className="detail-label"><Clock size={12} />Fare:</span>
-                                  <span className="detail-value">GH₵ {route.total_fare}</span>
-                                </div>
-                                <div className="detail-item">
-                                  <span className="detail-label"><Route size={12} />Distance:</span>
-                                  <span className="detail-value">{route.total_distance}km</span>
-                                </div>
-                                {route.travel_time_minutes && (
+                            </div>
+                            
+                            {route.vehicle_type && (
+                              <div className="route-extra-details">
+                                {route.frequency && (
                                   <div className="detail-item">
-                                    <span className="detail-label"><Clock size={12} />Time:</span>
-                                    <span className="detail-value">{formatTravelTime(route.travel_time_minutes)}</span>
+                                    <span className="detail-label">Frequency:</span>
+                                    <span className="detail-value">{route.frequency}</span>
                                   </div>
                                 )}
-                              </div>
-                    
-                              {route.vehicle_type && (
-                                <div className="route-extra-details">
-                                  {route.frequency && (
-                                    <div className="detail-item">
-                                      <span className="detail-label">Frequency:</span>
-                                      <span className="detail-value">{route.frequency}</span>
-                                    </div>
-                                  )}
+                                {route.vehicle_type && (
                                   <div className="detail-item">
                                     <span className="detail-label">Vehicle:</span>
                                     <span className="detail-value">{route.vehicle_type}</span>
                                   </div>
-                                  {route.peak_hours && (
-                                    <div className="detail-item">
-                                      <span className="detail-label">Peak Hours:</span>
-                                      <span className="detail-value">{route.peak_hours}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                    
-                              <p className="item-path">
-                                {route.route_stops?.map(rs => rs.stops.name).join(' → ')}
-                              </p>
-                            </div>
-                    
-                            <div className="item-actions">
-                              <button
-                                className="edit-button"
-                                onClick={(e) => { e.stopPropagation(); handleEditRoute(route); }}
-                              >
-                                <Edit3 size={16} />
-                              </button>
-                              <button
-                                className="delete-button"
-                                onClick={(e) => { e.stopPropagation(); handleDeleteRoute(route.id); }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                    
-                          {/* ── Route info panel (shown when route is clicked / selected) ── */}
-                          {selectedRouteId === route.id && (
-                            <div className="route-highlight-panel">
-                              <div className="route-highlight-panel-header">
-                                <Route size={14} color="#6b21a8" />
-                                <span className="route-highlight-panel-title">{route.name}</span>
-                                <button
-                                  className="route-highlight-panel-close"
-                                  onClick={(e) => { e.stopPropagation(); setSelectedRouteId(null); }}
-                                >
-                                  <X size={14} />
-                                </button>
-                              </div>
-                    
-                              {/* Key metrics grid */}
-                              <div className="route-highlight-meta">
-                                <div className="route-highlight-meta-item">
-                                  <span className="route-highlight-meta-label">Total Fare</span>
-                                  <span className="route-highlight-meta-value">GH₵ {route.total_fare}</span>
-                                </div>
-                                <div className="route-highlight-meta-item">
-                                  <span className="route-highlight-meta-label">Distance</span>
-                                  <span className="route-highlight-meta-value">{route.total_distance} km</span>
-                                </div>
-                                {route.travel_time_minutes && (
-                                  <div className="route-highlight-meta-item">
-                                    <span className="route-highlight-meta-label">Est. Time</span>
-                                    <span className="route-highlight-meta-value">{formatTravelTime(route.travel_time_minutes)}</span>
-                                  </div>
-                                )}
-                                {route.vehicle_type && (
-                                  <div className="route-highlight-meta-item">
-                                    <span className="route-highlight-meta-label">Vehicle</span>
-                                    <span className="route-highlight-meta-value">{route.vehicle_type}</span>
-                                  </div>
-                                )}
-                                {route.frequency && (
-                                  <div className="route-highlight-meta-item">
-                                    <span className="route-highlight-meta-label">Frequency</span>
-                                    <span className="route-highlight-meta-value">{route.frequency}</span>
-                                  </div>
                                 )}
                                 {route.peak_hours && (
-                                  <div className="route-highlight-meta-item">
-                                    <span className="route-highlight-meta-label">Peak Hours</span>
-                                    <span className="route-highlight-meta-value">{route.peak_hours}</span>
+                                  <div className="detail-item">
+                                    <span className="detail-label">Peak Hours:</span>
+                                    <span className="detail-value">{route.peak_hours}</span>
                                   </div>
                                 )}
                               </div>
-                    
-                              {/* Stop sequence */}
-                              <div className="route-highlight-stops-path">
-                                {route.route_stops
-                                  ?.slice()
-                                  .sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0))
-                                  .map((rs, idx, arr) => (
-                                    <span key={rs.stop_id || idx}>
-                                      {idx === 0
-                                        ? <strong style={{ color: '#10b981' }}>{rs.stops.name}</strong>
-                                        : idx === arr.length - 1
-                                        ? <strong style={{ color: '#ef4444' }}>{rs.stops.name}</strong>
-                                        : <span>{rs.stops.name}</span>
-                                      }
-                                      {idx < arr.length - 1 && (
-                                        <span style={{ color: '#6b21a8', margin: '0 4px' }}>→</span>
-                                      )}
-                                    </span>
-                                  ))
-                                }
-                              </div>
-                    
-                              {/* Amenities */}
-                              {route.amenities?.length > 0 && (
-                                <>
-                                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginTop: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Amenities
-                                  </div>
-                                  <div className="route-highlight-amenities">
-                                    {route.amenities.map(a => (
-                                      <span key={a} className="route-highlight-amenity-tag">
-                                        {a.replace(/_/g, ' ')}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </>
-                              )}
-                    
-                              {/* Operating hours */}
-                              {route.operating_hours?.days?.length > 0 && (
-                                <>
-                                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginTop: '10px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Operating Hours &amp; Days
-                                  </div>
-                                  {route.operating_hours.start && (
-                                    <div style={{ fontSize: '12px', color: '#374151', marginBottom: '6px' }}>
-                                     <Clock size={11} />  {route.operating_hours.start} — {route.operating_hours.end}
-                                    </div>
-                                  )}
-                                  <div className="route-highlight-days">
-                                    {route.operating_hours.days.map(day => (
-                                      <span key={day} className="route-highlight-day-tag">
-                                        {day.substring(0, 3)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </>
-                              )}
-                    
-                              {/* Notes */}
-                              {route.notes && (
-                                <div style={{
-                                  marginTop: '10px', fontSize: '12px', color: '#6b7280',
-                                  background: '#f9fafb', borderRadius: '8px', padding: '8px 12px',
-                                  borderLeft: '3px solid #7c3aed'
-                                }}>
-                                  ☑️ {route.notes}
-                                </div>
-                              )}
-                    
-                              {/** <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '10px', fontStyle: 'italic' }}>
-                                Route is highlighted on the map. Click the card or another route to change selection.
-                              </p> **/}
-                            </div>
-                          )}
-                        </React.Fragment>
+                            )}
+                            
+                            <p className="item-path">
+                              {route.route_stops?.map(rs => rs.stops.name).join(' → ')}
+                            </p>
+                          </div>
+                          <div className="item-actions">
+                            <button 
+                              className="edit-button"
+                              onClick={() => handleEditRoute(route)}
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                            <button 
+                              className="delete-button"
+                              onClick={() => handleDeleteRoute(route.id)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
-
                   </div>
                 )}
               </div>
