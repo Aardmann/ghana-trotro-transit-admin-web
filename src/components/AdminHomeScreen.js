@@ -35,6 +35,8 @@ import {
   CalendarDays
 } from 'lucide-react';
 import RouteCreationWithMap from './RouteCreationWithMap';
+import StopForm from './StopForm';
+import './StopForm.css';
 
 // Ghana regions
 const GHANA_REGIONS = [
@@ -384,74 +386,6 @@ const AuthForm = ({
   {isLoading ? 'Sending...' : 'Forgot Password?'}
 </button>
         </form>
-      </div>
-    </div>
-  );
-};
-
-const StopForm = ({ 
-  newStop, 
-  onStopNameChange, 
-  onSelectLocation, 
-  onAddStop, 
-  onCancel, 
-  isLoading,
-  onOpenAutoFinder
-}) => {
-  return (
-    <div className="form-container">
-      <h2 className="form-title">Add New Stop</h2>
-      
-      <button 
-        className="auto-finder-button"
-        onClick={onOpenAutoFinder}
-      >
-        <Search size={20} />
-        Find Stops Automatically
-      </button>
-      
-      <p className="divider-text">OR</p>
-      
-      <div className="input-group">
-        <input
-          className="input"
-          placeholder="Stop Name (e.g., 'Circle', 'Madina')"
-          value={newStop.name}
-          onChange={(e) => onStopNameChange(e.target.value)}
-        />
-      </div>
-      
-      <button 
-        className="location-button"
-        onClick={onSelectLocation}
-      >
-        <MapPin size={20} />
-        {newStop.latitude ? 'Location Selected ✓' : 'Select Location on Map'}
-      </button>
-      
-      {newStop.latitude && (
-        <div className="coordinates-container">
-          <p className="location-text">Selected Coordinates:</p>
-          <p className="coordinates-text">Lat: {newStop.latitude.toFixed(6)}</p>
-          <p className="coordinates-text">Lng: {newStop.longitude.toFixed(6)}</p>
-        </div>
-      )}
-      
-      <div className="button-row">
-        <button 
-          className="cancel-button"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-        
-        <button 
-          className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
-          onClick={onAddStop}
-          disabled={isLoading || !newStop.latitude}
-        >
-          {isLoading ? <div className="spinner"></div> : 'Save Stop'}
-        </button>
       </div>
     </div>
   );
@@ -952,9 +886,17 @@ const AutomaticStopFinder = ({
   return (
     <div className="form-container">
       <div className="finder-header">
-        <h2 className="form-title">Automatic Stop Finder</h2>
+        <button className="asf-back-btn" onClick={onCancel} title="Back to Add Stop">
+          <ArrowLeft size={18} />
+        </button>
+        <div className="asf-header-text">
+          <h2 className="form-title">Automatic Stop Finder</h2>
+        </div>
+      </div>
+      <div className="asf-info">
         <p className="form-subtitle">Find bus stops, stations, taxi ranks, and junctions in Ghana</p>
       </div>
+
       
       <div className="input-group">
         <label className="input-label">Select Region</label>
@@ -980,6 +922,7 @@ const AutomaticStopFinder = ({
         >
           {isLoading ? <div className="spinner"></div> : 'Find Stops Automatically'}
         </button>
+        
         
         {foundStops.length > 0 && (
           <div className="results-info">
@@ -1502,6 +1445,10 @@ const AdminHomeScreen = () => {
   const [isSelectingLocation, setIsSelectingLocation] = useState(false);
   const [newStop, setNewStop] = useState({ name: '', latitude: null, longitude: null });
   
+  const [excelPreviewStop,  setExcelPreviewStop]  = useState(null);
+  const [rowPickCallback,   setRowPickCallback]   = useState(null);
+
+
   const [showAutoStopFinder, setShowAutoStopFinder] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState('');
   const [foundStops, setFoundStops] = useState([]);
@@ -1806,6 +1753,53 @@ const handleLocationResultSelect = (location) => {
     lng: location.longitude
   });
 };
+  
+const handleLatChange = (val) => {
+  const num = parseFloat(val);
+  setNewStop(prev => ({ ...prev, latitude: isNaN(num) ? null : num }));
+};
+ 
+const handleLngChange = (val) => {
+  const num = parseFloat(val);
+  setNewStop(prev => ({ ...prev, longitude: isNaN(num) ? null : num }));
+};
+ 
+// Bulk import from Excel
+const handleAddMultipleStops = async (stops) => {
+  setIsLoading(true);
+  let ok = 0, fail = 0;
+  for (const stop of stops) {
+    try {
+      const { error } = await supabase
+        .from('stops')
+        .insert({ name: stop.name, latitude: stop.latitude, longitude: stop.longitude });
+      if (error) { console.error(error); fail++; } else ok++;
+    } catch (err) {
+      console.error(err); fail++;
+    }
+  }
+  setIsLoading(false);
+  await loadStops();          // ← use your actual reload function name
+  if (fail === 0) alert(`✅ Added ${ok} stop${ok !== 1 ? 's' : ''} successfully!`);
+  else alert(`⚠️ Added ${ok}, failed ${fail}. See console for details.`);
+};
+ 
+// Excel row preview → temp marker on map
+const handlePreviewExcelStop = (stop) => {
+  setExcelPreviewStop(stop);
+  if (stop) {
+    // Pan map to the previewed stop
+    setPanToLocation({ lat: stop.latitude, lng: stop.longitude });
+  }
+};
+
+const handleRequestMapPick = (callback) => {
+  // Wrap in a function so useState doesn't call it immediately
+  setRowPickCallback(() => callback);
+  setIsSelectingLocation(true);
+  toggleBottomSheet(false);   // ← collapses the side panel
+};
+
 
 const handleAddSearchedLocation = () => {
   if (!searchedLocation) {
@@ -3018,26 +3012,28 @@ const handleForgotPassword = async () => {
   };
 
   const handleMapPress = (lat, lng) => {
+ 
+    // ── NEW: if a row-pick is in progress, call its callback ──
+    if (rowPickCallback) {
+      rowPickCallback(lat, lng);
+      setRowPickCallback(null);
+      setIsSelectingLocation(false);
+      toggleBottomSheet(true);  // re-open the side panel
+      return;
+    }
+  
+    // ── EXISTING logic below (unchanged) ──
     if (isSelectingLocation) {
       if (editingStop) {
-        setEditingStop(prev => ({
-          ...prev,
-          latitude: lat,
-          longitude: lng
-        }));
+        setEditingStop(prev => ({ ...prev, latitude: lat, longitude: lng }));
       } else {
-        setNewStop(prev => ({
-          ...prev,
-          latitude: lat,
-          longitude: lng
-        }));
+        setNewStop(prev => ({ ...prev, latitude: lat, longitude: lng }));
       }
       setIsSelectingLocation(false);
-    }
-    if (routeCreationMode === 'plotting') {
-      handleMapPressForRoute(lat, lng);
+      toggleBottomSheet(true);
     }
   };
+
 
   const handleAddStop = async () => {
     if (!newStop.name || !newStop.latitude || !newStop.longitude) {
@@ -5336,7 +5332,7 @@ return (
             routes={routes}
             searchedLocation={searchedLocation}
             selectedStop={editingStop || (newStop.latitude ? newStop : null)}
-            previewStop={previewStop}
+            previewStop={excelPreviewStop || previewStop}
             panToLocation={panToLocation}
             onMapPress={(lat, lng) => {
               if (routeCreationMode === 'plotting') {
@@ -5567,14 +5563,19 @@ return (
                   <StopForm
                     newStop={newStop}
                     onStopNameChange={(text) => setNewStop(prev => ({ ...prev, name: text }))}
-                      onSelectLocation={() => {
-                        setIsSelectingLocation(true)
-                        toggleBottomSheet(false);
+                    onLatChange={handleLatChange}
+                    onLngChange={handleLngChange}
+                    onSelectLocation={() => {
+                      setIsSelectingLocation(true);
+                      toggleBottomSheet(false);
                     }}
                     onAddStop={handleAddStop}
+                    onAddMultipleStops={handleAddMultipleStops}
                     onCancel={() => setNewStop({ name: '', latitude: null, longitude: null })}
                     isLoading={isLoading}
                     onOpenAutoFinder={() => setShowAutoStopFinder(true)}
+                    onPreviewExcelStop={handlePreviewExcelStop}
+                    onRequestMapPick={handleRequestMapPick}
                   />
                 )}
 

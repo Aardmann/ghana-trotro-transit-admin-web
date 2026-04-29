@@ -1124,8 +1124,43 @@ body {
 }
 
 .finder-header {
-  text-align: center;
-  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+ 
+.asf-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  background: var(--border);
+  border: none;
+  border-radius: 8px;
+  color: var(--text-light);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+ 
+.asf-back-btn:hover {
+  background: rgba(107, 33, 168, 0.1);
+  color: var(--primary);
+}
+ 
+.asf-header-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.asf-info {
+  margin-top: -15px;
+  margin-left: -20px
 }
 
 .region-select {

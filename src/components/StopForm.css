@@ -1,0 +1,323 @@
+/* ══════════════════════════════════════════════════════════
+   StopForm.css — Full styles (replaces previous version)
+══════════════════════════════════════════════════════════ */
+
+.stop-form-root {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Header ── */
+.sf-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+
+.sf-header-icon {
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(107,33,168,0.3);
+}
+
+.sf-title   { font-size: 18px; font-weight: 700; color: var(--text); margin: 0; }
+.sf-subtitle { font-size: 12px; color: var(--text-light); margin: 2px 0 0 0; }
+
+/* ── Auto-finder ── */
+.sf-autofinder-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 16px; background: transparent; border: 2px dashed var(--primary-light);
+  border-radius: 10px; color: var(--primary); font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; margin-bottom: 16px;
+}
+.sf-autofinder-btn:hover { background: rgba(107,33,168,0.06); border-color: var(--primary); }
+
+/* ── Divider ── */
+.sf-divider {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  color: var(--text-light); font-size: 12px; font-weight: 500;
+}
+.sf-divider::before, .sf-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── Mode tabs ── */
+.sf-mode-tabs {
+  display: flex; background: var(--border); border-radius: 10px;
+  padding: 4px; gap: 4px; margin-bottom: 20px;
+}
+.sf-mode-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 12px; border: none; border-radius: 7px; background: transparent;
+  color: var(--text-light); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.sf-mode-tab--active { background: white; color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.10); }
+
+/* ── Panel ── */
+.sf-panel { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Field + Label ── */
+.sf-field { display: flex; flex-direction: column; gap: 6px; }
+.sf-label { font-size: 12px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.04em; }
+.sf-label--sm { font-size: 11px; }
+
+/* ── Input ── */
+.sf-input-wrap { position: relative; }
+.sf-input-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.sf-input {
+  width: 100%; border: 2px solid var(--border); border-radius: 8px; padding: 11px 14px;
+  font-size: 14px; background: var(--background); color: var(--text);
+  outline: none; transition: all 0.2s; box-sizing: border-box;
+}
+.sf-input--icon { padding-left: 38px; }
+.sf-input--coord { font-family: 'SF Mono','Fira Code',monospace; font-size: 13px; }
+.sf-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(107,33,168,0.1); }
+.sf-input::placeholder { color: #c4c9d4; }
+
+/* ── Coord toggle ── */
+.sf-coord-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sf-coord-pills { display: flex; background: var(--border); border-radius: 8px; padding: 3px; gap: 3px; }
+.sf-coord-pill {
+  display: flex; align-items: center; gap: 5px; padding: 6px 10px; border: none;
+  border-radius: 6px; background: transparent; font-size: 12px; font-weight: 600;
+  color: var(--text-light); cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.sf-coord-pill--active { background: white; color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+
+/* ── Coord inputs 2-col ── */
+.sf-coord-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ── Map button ── */
+.sf-map-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 16px; border: none; border-radius: 10px; color: white;
+  font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  box-shadow: 0 4px 12px rgba(107,33,168,0.25);
+}
+.sf-map-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(107,33,168,0.35); }
+.sf-map-btn--success {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  box-shadow: 0 4px 12px rgba(16,185,129,0.25);
+}
+.sf-map-btn--success:hover { box-shadow: 0 6px 16px rgba(16,185,129,0.35); }
+
+/* ── Coord badge ── */
+.sf-coord-badge {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: rgba(107,33,168,0.06); border: 1px solid rgba(107,33,168,0.15);
+  border-radius: 8px; font-size: 13px; font-family: 'SF Mono','Fira Code',monospace;
+}
+.sf-coord-value { color: var(--primary); font-weight: 600; }
+
+/* ── Action buttons row ── */
+.sf-actions { display: flex; gap: 10px; margin-top: 4px; }
+.sf-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; border: none;
+}
+.sf-btn--cancel { background: var(--border); color: var(--text-light); }
+.sf-btn--cancel:hover { background: #d1d5db; color: var(--text); }
+.sf-btn--primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white; box-shadow: 0 4px 12px rgba(107,33,168,0.25);
+}
+.sf-btn--primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(107,33,168,0.35); }
+.sf-btn--primary:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; box-shadow: none; }
+
+/* ── Spinner ── */
+.sf-spinner {
+  width: 16px; height: 16px; flex-shrink: 0;
+  border: 2px solid rgba(107,33,168,0.2); border-top-color: var(--primary);
+  border-radius: 50%; animation: sf-spin 0.7s linear infinite;
+}
+.sf-spinner--white { border-color: rgba(255,255,255,0.3); border-top-color: white; }
+@keyframes sf-spin { to { transform: rotate(360deg); } }
+
+/* ════════════════════════════════════════
+   EXCEL IMPORT
+════════════════════════════════════════ */
+
+.sf-excel-hint {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: rgba(107,33,168,0.05); border: 1px solid rgba(107,33,168,0.12);
+  border-radius: 8px; font-size: 12.5px; color: var(--text-light);
+}
+.sf-excel-hint strong { color: var(--primary); font-weight: 700; }
+
+/* ── Drop zone ── */
+.sf-dropzone {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 40px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  cursor: pointer; transition: all 0.2s; background: var(--background); text-align: center;
+}
+.sf-dropzone:hover, .sf-dropzone--dragging {
+  border-color: var(--primary-light); background: rgba(107,33,168,0.04);
+}
+.sf-dropzone--dragging { border-color: var(--primary); transform: scale(1.01); box-shadow: 0 0 0 4px rgba(107,33,168,0.08); }
+.sf-dropzone-icon {
+  width: 56px; height: 56px; background: rgba(107,33,168,0.08); border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 4px; transition: all 0.2s;
+}
+.sf-dropzone:hover .sf-dropzone-icon, .sf-dropzone--dragging .sf-dropzone-icon { background: rgba(107,33,168,0.14); transform: scale(1.05); }
+.sf-dropzone-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 0; }
+.sf-dropzone-sub   { font-size: 13px; color: var(--text-light); margin: 0; }
+.sf-dropzone-formats { margin-top: 4px; font-size: 11px; font-weight: 600; color: #c4c9d4; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ── Error banner ── */
+.sf-error {
+  display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px;
+  background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px;
+  color: #ef4444; font-size: 13px; line-height: 1.5;
+}
+.sf-error svg { flex-shrink: 0; margin-top: 1px; }
+
+/* ── Preview shell ── */
+.sf-preview { display: flex; flex-direction: column; gap: 10px; }
+
+.sf-preview-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+.sf-preview-file { display: flex; align-items: center; gap: 7px; padding: 6px 10px; background: rgba(107,33,168,0.06); border-radius: 8px; min-width: 0; }
+.sf-preview-filename { font-size: 13px; font-weight: 600; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.sf-preview-clear { background: none; border: none; cursor: pointer; color: var(--text-light); padding: 2px; border-radius: 4px; display: flex; transition: color 0.2s; }
+.sf-preview-clear:hover { color: #ef4444; }
+
+.sf-preview-counts { display: flex; gap: 6px; }
+.sf-preview-count { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+.sf-preview-count--total    { background: var(--border); color: var(--text-light); }
+.sf-preview-count--selected { background: rgba(107,33,168,0.1); color: var(--primary); }
+
+/* ── Toolbar ── */
+.sf-select-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sf-select-btn {
+  display: flex; align-items: center; gap: 5px; padding: 6px 12px;
+  background: white; border: 1.5px solid var(--border); border-radius: 6px;
+  font-size: 12px; font-weight: 600; color: var(--text-light); cursor: pointer; transition: all 0.15s;
+}
+.sf-select-btn:hover { border-color: var(--primary-light); color: var(--primary); background: rgba(107,33,168,0.04); }
+
+.sf-click-hint {
+  display: flex; align-items: center; gap: 4px; margin-left: auto;
+  font-size: 11px; font-weight: 500; color: var(--text-light); white-space: nowrap;
+}
+
+/* ── Table wrap ── */
+.sf-table-wrap {
+  border-radius: 10px; overflow: hidden; border: 1.5px solid var(--border);
+  max-height: 320px; overflow-y: auto;
+}
+.sf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+/* Sticky header */
+.sf-th {
+  padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light);
+  background: var(--surface); border-bottom: 1.5px solid var(--border);
+  white-space: nowrap; position: sticky; top: 0; z-index: 2;
+}
+.sf-th--check   { width: 36px; padding: 10px 8px 10px 12px; }
+.sf-th--num     { width: 32px; }
+.sf-th--actions { width: 84px; text-align: center; }
+
+/* ── Rows ── */
+.sf-tr { cursor: pointer; transition: background 0.12s; border-bottom: 1px solid var(--border); }
+.sf-tr:last-child { border-bottom: none; }
+.sf-tr:hover:not(.sf-tr--editing) { background: rgba(107,33,168,0.04); }
+.sf-tr--selected { background: rgba(107,33,168,0.045); }
+.sf-tr--selected:hover { background: rgba(107,33,168,0.08); }
+
+/* Previewed row — amber left accent */
+.sf-tr--previewed {
+  background: rgba(245,158,11,0.06) !important;
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+.sf-tr--previewed:hover { background: rgba(245,158,11,0.10) !important; }
+
+/* Editing row — purple left accent */
+.sf-tr--editing {
+  background: rgba(107,33,168,0.05) !important;
+  cursor: default;
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+/* ── Cells ── */
+.sf-td          { padding: 9px 12px; color: var(--text); vertical-align: middle; }
+.sf-td--check   { padding: 9px 8px 9px 12px; width: 36px; cursor: pointer; }
+.sf-td--num     { color: var(--text-light); font-size: 11px; font-weight: 600; width: 32px; text-align: center; }
+.sf-td--name    { font-weight: 500; max-width: 140px; }
+.sf-td--coord   { font-family: 'SF Mono','Fira Code',monospace; font-size: 11.5px; color: var(--text-light); white-space: nowrap; }
+.sf-td--actions { width: 84px; text-align: right; padding: 6px 10px; }
+.sf-td--edit-cell { padding: 5px 7px; }
+
+/* ── Stop name cell ── */
+.sf-stop-name-cell { display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.sf-stop-name-cell span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-name-previewed { color: #92400e !important; font-weight: 700 !important; }
+
+/* ── Checkbox ── */
+.sf-checkbox {
+  width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--border);
+  background: white; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.sf-checkbox--checked {
+  background: var(--primary); border-color: var(--primary);
+  box-shadow: 0 2px 6px rgba(107,33,168,0.3);
+}
+
+/* ── "Editing" badge inside row ── */
+.sf-editing-badge {
+  display: inline-flex; align-items: center; padding: 3px 8px;
+  background: rgba(107,33,168,0.12); color: var(--primary);
+  border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+
+/* ── Inline inputs (edit mode) ── */
+.sf-inline-input {
+  width: 100%; border: 1.5px solid var(--border); border-radius: 6px;
+  padding: 6px 9px; font-size: 12.5px; background: white; color: var(--text);
+  outline: none; transition: border-color 0.15s, box-shadow 0.15s; box-sizing: border-box;
+}
+.sf-inline-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(107,33,168,0.1); }
+.sf-inline-input--coord { font-family: 'SF Mono','Fira Code',monospace; font-size: 11.5px; }
+
+/* ── Row action buttons ── */
+.sf-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+
+.sf-row-btn {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 7px; cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+}
+/* Edit */
+.sf-row-btn--edit        { background: rgba(107,33,168,0.08); color: var(--primary); }
+.sf-row-btn--edit:hover  { background: rgba(107,33,168,0.18); }
+/* Delete */
+.sf-row-btn--delete       { background: rgba(239,68,68,0.08); color: #ef4444; }
+.sf-row-btn--delete:hover { background: rgba(239,68,68,0.18); }
+/* Pick on map */
+.sf-row-btn--map          { background: rgba(99,102,241,0.10); color: #6366f1; }
+.sf-row-btn--map:hover    { background: rgba(99,102,241,0.20); }
+/* Save */
+.sf-row-btn--save         { background: rgba(16,185,129,0.10); color: #10b981; }
+.sf-row-btn--save:hover   { background: rgba(16,185,129,0.20); }
+/* Cancel edit */
+.sf-row-btn--cancel-edit        { background: rgba(107,114,128,0.10); color: #6b7280; }
+.sf-row-btn--cancel-edit:hover  { background: rgba(107,114,128,0.20); }
+
+/* ── Add-selected CTA ── */
+.sf-add-selected-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 16px rgba(107,33,168,0.3); margin-top: 4px;
+}
+.sf-add-selected-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(107,33,168,0.4); }
+.sf-add-selected-btn:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; box-shadow: none; transform: none; }
+
+/* ── Scrollbar ── */
+.sf-table-wrap::-webkit-scrollbar       { width: 5px; height: 5px; }
+.sf-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.sf-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.sf-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--primary-light); }
