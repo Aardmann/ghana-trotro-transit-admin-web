@@ -3357,3 +3357,144 @@ body {
   backdrop-filter: blur(4px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
+
+/* ── Route Edit Mode Banner ── */
+.edit-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border: 1px solid #c4b5fd;
+  border-left: 4px solid #6b21a8;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #5b21b6;
+}
+
+.route-info-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+ 
+.route-info-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+ 
+/* ── Status badges ─────────────────────────────────────────────────────────── */
+.status-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+ 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+ 
+.status-approved {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+ 
+.status-rejected {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+ 
+.status-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+ 
+/* Spinning loader icon inside pending badge */
+.spin {
+  animation: spin 1.4s linear infinite;
+}
+ 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+ 
+/* Rejected reason pill */
+.rejected-reason {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  background-color: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #be123c;
+  max-width: 260px;
+  line-height: 1.4;
+}
+ 
+.rejected-reason svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+ 
+/* ── Scroll-to-top floating button ─────────────────────────────────────────── */
+.scroll-top-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background-color: #6b21a8;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(107, 33, 168, 0.35);
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  /* Stick to the bottom-right of its section */
+  position: sticky;
+  bottom: 16px;
+  float: right;
+  clear: both;
+  z-index: 10;
+}
+ 
+.scroll-top-btn:hover {
+  background-color: #581c87;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(107, 33, 168, 0.45);
+}
+ 
+.scroll-top-btn:active {
+  transform: translateY(0);
+}
+ 
+/* Clearfix after the sticky button so it doesn't bleed into siblings */
+.scroll-top-btn::after {
+  content: '';
+  display: block;
+  clear: both;
+}
+ 

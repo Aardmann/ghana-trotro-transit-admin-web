@@ -347,9 +347,25 @@ function MapPanController({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
     if (center && center.lat && center.lng) {
-      map.setView([center.lat, center.lng], zoom || map.getZoom());
+      map.flyTo([center.lat, center.lng], zoom || map.getZoom(), {
+        animate: true,
+        duration: 0.8,
+      });
     }
   }, [center, zoom, map]);
+  return null;
+}
+
+// Fits the map to a list of lat/lng points — used when edit mode starts
+function MapFitBounds({ positions }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!positions || positions.length < 2) return;
+    try {
+      const bounds = L.latLngBounds(positions);
+      map.flyToBounds(bounds.pad(0.18), { animate: true, duration: 0.9 });
+    } catch (e) {}
+  }, [map, positions]);
   return null;
 }
 
@@ -385,14 +401,21 @@ const MapComponent = ({
   selectedRouteId = null,
   hoveredStopId = null,
   selectedStopId = null,
+  // ── Edit-mode props ──
+  editPlottedStops = [],
+  editRouteCreationMode = null,
+  editingRouteId = null,
+  onEditStopClick = null,
 }) => {
   const mapRef = useRef();
 
   // ── Derived highlight state ──────────────────────────────────────────────
-  const activeRouteId   = selectedRouteId || hoveredRouteId;
+  // When actively editing a route, highlight that route; otherwise use hover/select
+  const activeRouteId   = editingRouteId || selectedRouteId || hoveredRouteId;
   const activeRoute     = activeRouteId ? routes.find(r => r.id === activeRouteId) : null;
   const activeStopId    = selectedStopId || hoveredStopId;
-  const isRouteSelected = !!selectedRouteId;
+  const isRouteSelected = !!(editingRouteId || selectedRouteId);
+  const isEditingRoute  = !!editingRouteId;
 
   // Set of stop IDs that belong to the highlighted route
   const highlightedRouteStopIds = activeRoute
@@ -418,17 +441,20 @@ const MapComponent = ({
         .filter(Boolean)
     : [];
 
-  // ── Stop marker click (route creation selecting mode) ───────────────────
+  // ── Stop marker click (route creation / edit selecting mode) ───────────
   const handleStopClick = (stop, event) => {
     event.originalEvent.preventDefault();
     event.originalEvent.stopPropagation();
-    if (routeCreationMode === 'selecting' && onStopClick) {
+    if (editRouteCreationMode === 'selecting' && onEditStopClick) {
+      onEditStopClick(stop);
+    } else if (routeCreationMode === 'selecting' && onStopClick) {
       onStopClick(stop);
     }
   };
 
   // ── Waypoints for route creation path ───────────────────────────────────
-  const routeWaypoints = plottedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
+  const routeWaypoints     = plottedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
+  const editRouteWaypoints = editPlottedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -445,6 +471,21 @@ const MapComponent = ({
         <div style={bannerStyle('#10B981')}>
           <Search size={20} />
           Click on existing stops to select them for your route
+        </div>
+      )}
+
+      {/* ── Route edit mode banners ── */}
+      {editRouteCreationMode === 'plotting' && (
+        <div style={bannerStyle('#D97706')}>
+          <MapPin size={20} />
+          Edit Mode: Click on map to add a stop to this route
+        </div>
+      )}
+
+      {editRouteCreationMode === 'selecting' && (
+        <div style={bannerStyle('#0891B2')}>
+          <Search size={20} />
+          Edit Mode: Click an existing stop on the map to add it to this route
         </div>
       )}
 
@@ -473,17 +514,43 @@ const MapComponent = ({
         </div>
       )}
 
-      {/* ── Highlight hint banner ── */}
-      {!routeCreationMode && activeRoute && (
+      {/* Edit mode: show live distance counter */}
+      {editRouteCreationMode && editPlottedStops.length >= 2 && (
         <div style={{
-          ...bannerStyle('#7c3aed'),
+          position: 'absolute',
+          top: '60px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(255,255,255,0.95)',
+          padding: '10px 20px',
+          borderRadius: '15px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          zIndex: 1000,
+          fontWeight: '500',
+          color: '#D97706',
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13px',
+        }}>
+          <Route size={18} />
+          Updated Route: {calculateRouteDistance(editPlottedStops).toFixed(2)} km •&nbsp;
+          Stops: {editPlottedStops.length}
+        </div>
+      )}
+
+      {/* ── Highlight hint banner ── */}
+      {!routeCreationMode && !editRouteCreationMode && activeRoute && (
+        <div style={{
+          ...bannerStyle(isEditingRoute ? '#D97706' : '#7c3aed'),
           top: '10px',
           fontSize: '13px',
           padding: '10px 20px',
         }}>
           <Route size={16} />
-          {activeRoute.name}
-          {isRouteSelected ? ' — click card again to deselect' : ''}
+          {isEditingRoute ? '✏️ Editing: ' : ''}{activeRoute.name}
+          {isRouteSelected && !isEditingRoute ? ' — click card again to deselect' : ''}
         </div>
       )}
 
@@ -501,12 +568,19 @@ const MapComponent = ({
 
         <MapEvents
           onMapPress={onMapPress}
-          isSelectingLocation={isSelectingLocation || routeCreationMode === 'plotting'}
+          isSelectingLocation={isSelectingLocation || routeCreationMode === 'plotting' || editRouteCreationMode === 'plotting'}
           routeCreationMode={routeCreationMode}
           onStopClick={onStopClick}
         />
 
         <MapPanController center={panToLocation} zoom={16} />
+
+        {/* ── Fit map to editing route bounds on edit start ── */}
+        {editingRouteId && editPlottedStops.length >= 2 && (
+          <MapFitBounds
+            positions={editPlottedStops.map(s => [s.latitude, s.longitude])}
+          />
+        )}
 
         {/* ── Highlighted route path (hover / selected from list) ── */}
         {activeRoute && (
@@ -518,6 +592,13 @@ const MapComponent = ({
           waypoints={routeWaypoints}
           routeColor={routeCreationMode === 'plotting' ? '#6b21a8' : '#10B981'}
           showRoute={showRoutePaths && plottedStops.length >= 2}
+        />
+
+        {/* ── OSRM routing for route editing ── */}
+        <RoutingControl
+          waypoints={editRouteWaypoints}
+          routeColor="#D97706"
+          showRoute={showRoutePaths && editPlottedStops.length >= 2}
         />
 
         {/* ── Existing stops (filtered by highlight state) ── */}
@@ -575,6 +656,18 @@ const MapComponent = ({
                     <span style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '12px' }}>
                       ✓ Added to route
                     </span>
+                  ) : editRouteCreationMode === 'selecting' ? (
+                    <>
+                      <div style={{ color: '#0891B2', fontSize: '12px', marginTop: '4px' }}>
+                        Click to add to edited route
+                      </div>
+                      <button
+                        style={{ ...addButtonStyle, background: '#0891B2' }}
+                        onClick={(e) => { e.stopPropagation(); if (onEditStopClick) onEditStopClick(stop); }}
+                      >
+                        Add to Route
+                      </button>
+                    </>
                   ) : routeCreationMode === 'selecting' ? (
                     <>
                       <div style={{ color: '#10B981', fontSize: '12px', marginTop: '4px' }}>
@@ -678,6 +771,35 @@ const MapComponent = ({
           </Marker>
         ))}
 
+        {/* ── Edit plotted stops with order numbers (route editing) ── */}
+        {editPlottedStops.map((stop, index) => (
+          <Marker
+            key={`edit-plotted-${stop.id || index}`}
+            position={[stop.latitude, stop.longitude]}
+            icon={createRouteStopIcon(
+              stop.isNew ? '#F59E0B' : '#D97706',
+              index + 1,
+              stop.isNew
+            )}
+          >
+            <Popup>
+              <div>
+                <b>{stop.isNew ? (stop.tempName || 'Unnamed Stop') : stop.name}</b><br />
+                {stop.isNew
+                  ? <span style={{ color: '#F59E0B' }}>New Stop #{index + 1}</span>
+                  : <span style={{ color: '#D97706' }}>✏️ Stop #{index + 1} (editing)</span>
+                }<br />
+                {stop.fareToNext && <span>Fare to next: GH₵ {stop.fareToNext}<br /></span>}
+                {index < editPlottedStops.length - 1 && (
+                  <span>Distance to next: {stop.distanceToNext || 'Calculating...'} km<br /></span>
+                )}
+                Lat: {Number(stop.latitude).toFixed(6)}<br />
+                Lng: {Number(stop.longitude).toFixed(6)}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+
         {/* ── Fallback dashed lines between plotted stops ── */}
         {plottedStops.length >= 2 && showRoutePaths && (
           <>
@@ -692,6 +814,28 @@ const MapComponent = ({
                   ]}
                   color={routeCreationMode === 'plotting' ? '#6b21a8' : '#10B981'}
                   opacity={0.5}
+                  weight={3}
+                  dashArray="10, 10"
+                />
+              );
+            })}
+          </>
+        )}
+
+        {/* ── Fallback dashed lines between edit plotted stops ── */}
+        {editPlottedStops.length >= 2 && showRoutePaths && (
+          <>
+            {editPlottedStops.slice(0, -1).map((stop, index) => {
+              const nextStop = editPlottedStops[index + 1];
+              return (
+                <Polyline
+                  key={`edit-line-${index}`}
+                  positions={[
+                    [stop.latitude, stop.longitude],
+                    [nextStop.latitude, nextStop.longitude],
+                  ]}
+                  color="#D97706"
+                  opacity={0.6}
                   weight={3}
                   dashArray="10, 10"
                 />
