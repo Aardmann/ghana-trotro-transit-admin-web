@@ -1772,10 +1772,54 @@ const handleLngChange = (val) => {
 };
  
 // Bulk import from Excel
-const handleAddMultipleStops = async (stops) => {
+const handleAddMultipleStops = async (stopsFromFile) => {
+  const COORD_THRESHOLD = 0.0005; // ~50 m
+
+  // ── Filter out stops that already exist (by name OR coords) ──────────────
+  const toInsert      = [];
+  const skippedByName   = [];
+  const skippedByCoords = [];
+
+  stopsFromFile.forEach(candidate => {
+    const nameNorm = candidate.name.trim().toLowerCase();
+
+    const nameMatch = stops.find(s =>
+      s.name.trim().toLowerCase() === nameNorm
+    );
+
+    const coordMatch = !nameMatch && stops.find(s =>
+      Math.abs(s.latitude  - candidate.latitude)  < COORD_THRESHOLD &&
+      Math.abs(s.longitude - candidate.longitude) < COORD_THRESHOLD
+    );
+
+    if (nameMatch) {
+      skippedByName.push({ candidate, existing: nameMatch });
+    } else if (coordMatch) {
+      skippedByCoords.push({ candidate, existing: coordMatch });
+    } else {
+      toInsert.push(candidate);
+    }
+  });
+
+  // If every stop is a duplicate, inform and bail out
+  if (toInsert.length === 0) {
+    const lines = [
+      ...skippedByName.map(({ candidate, existing }) =>
+        `• "${candidate.name}" — same name as existing stop "${existing.name}"`),
+      ...skippedByCoords.map(({ candidate, existing }) =>
+        `• "${candidate.name}" — within 50 m of existing stop "${existing.name}"`),
+    ];
+    alert(
+      `❌ No stops were added — all selected stops already exist in the database:\n\n` +
+      lines.join('\n')
+    );
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   setIsLoading(true);
   let ok = 0, fail = 0;
-  for (const stop of stops) {
+  for (const stop of toInsert) {
     try {
       const { error } = await supabase
         .from('stops')
@@ -1786,9 +1830,30 @@ const handleAddMultipleStops = async (stops) => {
     }
   }
   setIsLoading(false);
-  await loadStops();          // ← use your actual reload function name
-  if (fail === 0) alert(`✅ Added ${ok} stop${ok !== 1 ? 's' : ''} successfully!`);
-  else alert(`⚠️ Added ${ok}, failed ${fail}. See console for details.`);
+  await loadStops();
+
+  // Build summary message
+  const skippedLines = [
+    ...skippedByName.map(({ candidate, existing }) =>
+      `• "${candidate.name}" — same name as "${existing.name}"`),
+    ...skippedByCoords.map(({ candidate, existing }) =>
+      `• "${candidate.name}" — within 50 m of "${existing.name}"`),
+  ];
+
+  let message = '';
+  if (fail === 0) {
+    message = `✅ Added ${ok} stop${ok !== 1 ? 's' : ''} successfully!`;
+  } else {
+    message = `⚠️ Added ${ok}, failed to save ${fail} (see console for details).`;
+  }
+
+  if (skippedLines.length > 0) {
+    message +=
+      `\n\n⚠️ ${skippedLines.length} stop${skippedLines.length !== 1 ? 's' : ''} skipped — already in the database:\n` +
+      skippedLines.join('\n');
+  }
+
+  alert(message);
 };
  
 // Excel row preview → temp marker on map
@@ -2352,10 +2417,60 @@ const findStopsUsingNominatim = async (region) => {
       return;
     }
 
+    const COORD_THRESHOLD = 0.0005; // ~50 m
+
+    // ── Filter out stops that already exist (by name OR coords) ──────────────
+    const stopsToSave = [];
+    const skippedByName  = [];
+    const skippedByCoords = [];
+
+    selectedFoundStops.forEach(index => {
+      const candidate = foundStops[index];
+      const nameNorm = candidate.name.trim().toLowerCase();
+
+      const nameMatch = stops.find(s =>
+        s.name.trim().toLowerCase() === nameNorm
+      );
+
+      const coordMatch = !nameMatch && stops.find(s =>
+        Math.abs(s.latitude  - candidate.latitude)  < COORD_THRESHOLD &&
+        Math.abs(s.longitude - candidate.longitude) < COORD_THRESHOLD
+      );
+
+      if (nameMatch) {
+        skippedByName.push({ candidate, existing: nameMatch });
+      } else if (coordMatch) {
+        skippedByCoords.push({ candidate, existing: coordMatch });
+      } else {
+        stopsToSave.push(candidate);
+      }
+    });
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Build a summary of what was skipped so the admin knows
+    const skippedLines = [
+      ...skippedByName.map(
+        ({ candidate, existing }) =>
+          `• "${candidate.name}" — same name as existing stop "${existing.name}" ` +
+          `(${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})`
+      ),
+      ...skippedByCoords.map(
+        ({ candidate, existing }) =>
+          `• "${candidate.name}" — too close to existing stop "${existing.name}" ` +
+          `(${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})`
+      ),
+    ];
+
+    if (stopsToSave.length === 0) {
+      alert(
+        `❌ All selected stops already exist in the database and were not added:\n\n` +
+        skippedLines.join('\n')
+      );
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const stopsToSave = selectedFoundStops.map(index => foundStops[index]);
-      
       const { data, error } = await supabase
         .from('stops')
         .insert(
@@ -2368,8 +2483,15 @@ const findStopsUsingNominatim = async (region) => {
         .select();
 
       if (error) throw error;
-      
-      alert(`${stopsToSave.length} stops added successfully!`);
+
+      let message = `✅ ${stopsToSave.length} stop(s) added successfully!`;
+      if (skippedLines.length > 0) {
+        message +=
+          `\n\n⚠️ ${skippedLines.length} stop(s) were skipped because they already exist:\n\n` +
+          skippedLines.join('\n');
+      }
+      alert(message);
+
       setFoundStops([]);
       setSelectedFoundStops([]);
       setShowAutoStopFinder(false);
@@ -2650,6 +2772,72 @@ const handleRemovePlottedStop = (index) => {
   });
 };
 
+// ── Duplicate-detection helpers ───────────────────────────────────────────────
+
+/**
+ * Check whether a stop with the same name or very close coordinates already
+ * exists in the currently-loaded stops list.
+ *
+ * @param {string}      name      - The candidate stop name
+ * @param {number}      lat       - Latitude
+ * @param {number}      lng       - Longitude
+ * @param {string|null} excludeId - Stop ID to exclude (for edit flows)
+ * @returns {{ byName: stop[], byCoords: stop[] }}
+ */
+const checkDuplicateStop = (name, lat, lng, excludeId = null) => {
+  const COORD_THRESHOLD = 0.0005; // roughly 50 m
+  const nameNorm = name.trim().toLowerCase();
+
+  const byName = stops.filter(s =>
+    (excludeId ? s.id !== excludeId : true) &&
+    s.name.trim().toLowerCase() === nameNorm
+  );
+
+  const byCoords = stops.filter(s =>
+    (excludeId ? s.id !== excludeId : true) &&
+    Math.abs(s.latitude  - lat) < COORD_THRESHOLD &&
+    Math.abs(s.longitude - lng) < COORD_THRESHOLD
+  );
+
+  return { byName, byCoords };
+};
+
+/**
+ * Check whether a route with the same name or the same stop sequence already
+ * exists in the currently-loaded routes list.
+ *
+ * @param {string}      name      - The candidate route name
+ * @param {string[]}    stopIds   - Ordered stop IDs (may contain null for brand-new stops)
+ * @param {string|null} excludeId - Route ID to exclude (for edit flows)
+ * @returns {{ byName: route[], byStops: route[] }}
+ */
+const checkDuplicateRoute = (name, stopIds, excludeId = null) => {
+  const nameNorm = name.trim().toLowerCase();
+
+  const byName = routes.filter(r =>
+    (excludeId ? r.id !== excludeId : true) &&
+    r.name.trim().toLowerCase() === nameNorm
+  );
+
+  // Only compare stop sequences when every candidate stop already has a real ID
+  const allIdsKnown = stopIds.length > 0 && stopIds.every(Boolean);
+
+  const byStops = allIdsKnown
+    ? routes.filter(r => {
+        if (excludeId && r.id === excludeId) return false;
+        const routeStopIds = (r.route_stops || [])
+          .slice()
+          .sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0))
+          .map(rs => rs.stops?.id ?? rs.stop_id);
+        return routeStopIds.join('-') === stopIds.join('-');
+      })
+    : [];
+
+  return { byName, byStops };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Update the handleSavePlottedRoute function
 const handleSavePlottedRoute = async () => {
   console.log('Attempting to save route...', {
@@ -2692,6 +2880,40 @@ const handleSavePlottedRoute = async () => {
     alert('Please enter a route name');
     return;
   }
+
+  // ── Duplicate detection (hard block) ──────────────────────────────────────
+  // Collect IDs of existing (non-new) stops so we can check the stop sequence
+  const candidateStopIds = plottedStops.map(s => (s.isNew ? null : s.id));
+  const { byName: dupByName, byStops: dupByStops } = checkDuplicateRoute(
+    newRoute.name, candidateStopIds
+  );
+
+  if (dupByName.length > 0) {
+    const existing = dupByName[0];
+    const existingPath = (existing.route_stops || [])
+      .slice()
+      .sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0))
+      .map(rs => rs.stops?.name ?? 'Unknown')
+      .join(' → ');
+    alert(
+      `❌ Cannot create route — a route with this name already exists:\n\n` +
+      `• "${existing.name}"\n` +
+      `  Stops: ${existingPath || 'N/A'}\n\n` +
+      `Please choose a different route name.`
+    );
+    return;
+  }
+
+  if (dupByStops.length > 0) {
+    const existing = dupByStops[0];
+    alert(
+      `❌ Cannot create route — a route with the exact same stop sequence already exists:\n\n` +
+      `• "${existing.name}"\n\n` +
+      `Please adjust the stops involved or edit the existing route instead.`
+    );
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   console.log('All validations passed, proceeding to save...');
 
@@ -3048,6 +3270,34 @@ const handleForgotPassword = async () => {
       return;
     }
 
+    // ── Duplicate detection (hard block) ──────────────────────────────────
+    const { byName, byCoords } = checkDuplicateStop(
+      newStop.name, newStop.latitude, newStop.longitude
+    );
+
+    if (byName.length > 0) {
+      const existing = byName[0];
+      alert(
+        `❌ Cannot add stop — a stop with this name already exists:\n\n` +
+        `• "${existing.name}"\n` +
+        `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
+        `Please use a different name or select the existing stop instead.`
+      );
+      return;
+    }
+
+    if (byCoords.length > 0) {
+      const existing = byCoords[0];
+      alert(
+        `❌ Cannot add stop — another stop already exists within 50 m of this location:\n\n` +
+        `• "${existing.name}"\n` +
+        `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
+        `Please choose a different location or use the existing stop instead.`
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -3084,6 +3334,34 @@ const handleForgotPassword = async () => {
       alert('Please fill all fields and select a location');
       return;
     }
+
+    // ── Duplicate detection — hard block (exclude self) ───────────────────
+    const { byName, byCoords } = checkDuplicateStop(
+      editingStop.name, editingStop.latitude, editingStop.longitude, editingStop.id
+    );
+
+    if (byName.length > 0) {
+      const existing = byName[0];
+      alert(
+        `❌ Cannot update stop — another stop with this name already exists:\n\n` +
+        `• "${existing.name}"\n` +
+        `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
+        `Please choose a different name.`
+      );
+      return;
+    }
+
+    if (byCoords.length > 0) {
+      const existing = byCoords[0];
+      alert(
+        `❌ Cannot update stop — another stop already exists within 50 m of the new location:\n\n` +
+        `• "${existing.name}"\n` +
+        `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
+        `Please choose a different location.`
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     setIsLoading(true);
     try {
@@ -3190,6 +3468,37 @@ const handleAddRoute = async () => {
         return;
       }
     }
+
+    // ── Duplicate detection (hard block) ────────────────────────────────────
+    const stopIds = newRoute.stops.map(s => s.id);
+    const { byName: dupByName, byStops: dupByStops } = checkDuplicateRoute(newRoute.name, stopIds);
+
+    if (dupByName.length > 0) {
+      const existing = dupByName[0];
+      const existingPath = (existing.route_stops || [])
+        .slice()
+        .sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0))
+        .map(rs => rs.stops?.name ?? 'Unknown')
+        .join(' → ');
+      alert(
+        `❌ Cannot create route — a route with this name already exists:\n\n` +
+        `• "${existing.name}"\n` +
+        `  Stops: ${existingPath || 'N/A'}\n\n` +
+        `Please choose a different route name.`
+      );
+      return;
+    }
+
+    if (dupByStops.length > 0) {
+      const existing = dupByStops[0];
+      alert(
+        `❌ Cannot create route — a route with the exact same stop sequence already exists:\n\n` +
+        `• "${existing.name}"\n\n` +
+        `Please adjust the stops involved or edit the existing route instead.`
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     setIsLoading(true);
     try {
@@ -4633,6 +4942,39 @@ const handleUpdateRoute = async () => {
       return;
     }
 
+    // ── Duplicate detection — hard block (exclude self) ───────────────────
+    const candidateStopIds = editPlottedStops.map(s => (s.isNew ? null : s.id));
+    const { byName: dupByName, byStops: dupByStops } = checkDuplicateRoute(
+      editRouteData.name, candidateStopIds, editingRoute.id
+    );
+
+    if (dupByName.length > 0) {
+      const existing = dupByName[0];
+      const existingPath = (existing.route_stops || [])
+        .slice()
+        .sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0))
+        .map(rs => rs.stops?.name ?? 'Unknown')
+        .join(' → ');
+      alert(
+        `❌ Cannot update route — another route with this name already exists:\n\n` +
+        `• "${existing.name}"\n` +
+        `  Stops: ${existingPath || 'N/A'}\n\n` +
+        `Please choose a different route name.`
+      );
+      return;
+    }
+
+    if (dupByStops.length > 0) {
+      const existing = dupByStops[0];
+      alert(
+        `❌ Cannot update route — another route with the exact same stop sequence already exists:\n\n` +
+        `• "${existing.name}"\n\n` +
+        `Please adjust the stops involved.`
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     setIsLoading(true);
     try {
       // Save any brand-new stops to the DB first
@@ -5300,13 +5642,22 @@ const handleSaveSelectedRoutes = async () => {
       });
     }
 
-    // Check for duplicates in database
+    // Check for duplicates in database — by stop sequence (existing) AND by name
     const routesWithDuplicateInfo = await Promise.all(
-      allRoutesToSave.map(async (routeData) => ({
-        ...routeData,
-        isDuplicate: await checkRouteExists(routeData.route.stops),
-        routeKey: routeData.routeKey
-      }))
+      allRoutesToSave.map(async (routeData) => {
+        const sequenceDupe = await checkRouteExists(routeData.route.stops);
+
+        // Name-based check against already-loaded routes state
+        const nameNorm = routeData.name.trim().toLowerCase();
+        const nameDupe = routes.some(r => r.name.trim().toLowerCase() === nameNorm);
+
+        return {
+          ...routeData,
+          isDuplicate: sequenceDupe || nameDupe,
+          duplicateReason: sequenceDupe ? 'same stop sequence' : nameDupe ? 'same name' : null,
+          routeKey: routeData.routeKey
+        };
+      })
     );
 
     // Separate duplicates and non-duplicates
@@ -5329,16 +5680,15 @@ const handleSaveSelectedRoutes = async () => {
       return true;
     });
 
-    // Show duplicate warning if any duplicates found
+    // Show duplicate info — these are silently excluded (not added)
     if (duplicateRoutes.length > 0) {
-      const duplicateNames = duplicateRoutes.map(r => `${r.name} (${r.type})`).join('\n• ');
-      const shouldProceed = window.confirm(
-        `The following routes already exist in the database:\n\n• ${duplicateNames}\n\nDo you want to save only the new routes?`
+      const duplicateNames = duplicateRoutes
+        .map(r => `• ${r.name} (${r.type}) — ${r.duplicateReason}`)
+        .join('\n');
+      alert(
+        `ℹ️ The following ${duplicateRoutes.length} route(s) already exist and will NOT be added:\n\n` +
+        duplicateNames
       );
-      
-      if (!shouldProceed) {
-        return; // User canceled
-      }
     }
 
     // Save only non-duplicate routes
