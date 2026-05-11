@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/ghana-trotro-transit-admin-web/static/css/main.00289f7a.css",
-    "main.js": "/ghana-trotro-transit-admin-web/static/js/main.10aaae6c.js",
-    "static/js/453.2e7858e6.chunk.js": "/ghana-trotro-transit-admin-web/static/js/453.2e7858e6.chunk.js",
+    "main.css": "/ghana-trotro-transit-admin-web/static/css/main.f4bca80b.css",
+    "main.js": "/ghana-trotro-transit-admin-web/static/js/main.4d2fb74f.js",
+    "static/js/453.f5abc982.chunk.js": "/ghana-trotro-transit-admin-web/static/js/453.f5abc982.chunk.js",
     "index.html": "/ghana-trotro-transit-admin-web/index.html",
-    "main.00289f7a.css.map": "/ghana-trotro-transit-admin-web/static/css/main.00289f7a.css.map",
-    "main.10aaae6c.js.map": "/ghana-trotro-transit-admin-web/static/js/main.10aaae6c.js.map",
-    "453.2e7858e6.chunk.js.map": "/ghana-trotro-transit-admin-web/static/js/453.2e7858e6.chunk.js.map"
+    "main.f4bca80b.css.map": "/ghana-trotro-transit-admin-web/static/css/main.f4bca80b.css.map",
+    "main.4d2fb74f.js.map": "/ghana-trotro-transit-admin-web/static/js/main.4d2fb74f.js.map",
+    "453.f5abc982.chunk.js.map": "/ghana-trotro-transit-admin-web/static/js/453.f5abc982.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.00289f7a.css",
-    "static/js/main.10aaae6c.js"
+    "static/css/main.f4bca80b.css",
+    "static/js/main.4d2fb74f.js"
   ]
 }
