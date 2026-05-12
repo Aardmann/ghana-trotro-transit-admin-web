@@ -745,7 +745,7 @@ const RouteSelectionModal = ({
                       <span className="route-type-with-station">🚍 Station</span>
                     )}
                     {route.isDuplicate && (
-                      <span className="duplicate-badge">⚠️ Duplicate</span>
+                      <span className="duplicate-badge"> Duplicate</span>
                     )}
                     {route.hasSubRoutes && (
                       <span className="subroute-badge">🔗 Sub-routes</span>
@@ -1571,6 +1571,21 @@ const AdminHomeScreen = () => {
   const [hoveredStopId,  setHoveredStopId]  = useState(null);
   const [selectedStopId, setSelectedStopId] = useState(null);
 
+  // ── Spotlight — holds a stop/route from search results not in current page ─
+  // Merged into the stops/routes arrays passed to MapComponent so its marker shows
+  const [spotlightStop,  setSpotlightStop]  = useState(null);
+  const [spotlightRoute, setSpotlightRoute] = useState(null);
+
+  // ── Pagination state ──────────────────────────────────────────────────────
+  const PAGE_SIZE = 100;
+  const [totalStopsCount, setTotalStopsCount] = useState(0);
+  const [stopsPage, setStopsPage] = useState(0);
+  const [totalRoutesCount, setTotalRoutesCount] = useState(0);
+  const [routesPage, setRoutesPage] = useState(0);
+  const [isSearchingStops, setIsSearchingStops] = useState(false);
+  const [isSearchingRoutes, setIsSearchingRoutes] = useState(false);
+  // ─────────────────────────────────────────────────────────────────────────
+
 
   // Filter stops based on match whole word setting
   const filterStopsByName = (stopsList, query, wholeWord = false) => {
@@ -1597,8 +1612,25 @@ const AdminHomeScreen = () => {
     }
   };
 
-  // Handle stop search with match whole word
-  const handleStopSearch = (query, field, index) => {
+  // ── DB-side stop search (works across all records, not just current page) ─
+  const searchStopsFromDB = async (query, limit = 5) => {
+    if (!query || query.length < 1) return [];
+    try {
+      const { data } = await supabase
+        .from('stops')
+        .select('*')
+        .ilike('name', `%${query}%`)
+        .order('name')
+        .limit(limit);
+      return data || [];
+    } catch {
+      return [];
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Handle stop search with match whole word — queries DB so it works across all pages
+  const handleStopSearch = async (query, field, index) => {
     if (query.length < 1) {
       setStopSuggestions(prev => ({
         ...prev,
@@ -1607,7 +1639,7 @@ const AdminHomeScreen = () => {
       return;
     }
 
-    const filtered = filterStopsByName(stops, query, matchWholeWord).slice(0, 5);
+    const filtered = await searchStopsFromDB(query, 5);
 
     setStopSuggestions(prev => ({
       ...prev,
@@ -1615,11 +1647,11 @@ const AdminHomeScreen = () => {
     }));
   };
 
-  // Handle route stop search
-  const handleRouteStopSearch = (query) => {
+  // Handle route stop search — queries DB so it works across all pages
+  const handleRouteStopSearch = async (query) => {
     setSearchQuery(query);
     if (query.length > 0) {
-      const filtered = filterStopsByName(stops, query, matchWholeWord).slice(0, 5);
+      const filtered = await searchStopsFromDB(query, 5);
       setSearchResults(filtered);
     } else {
       setSearchResults([]);
@@ -1627,42 +1659,14 @@ const AdminHomeScreen = () => {
   };
 
   // Toggle match whole word
-  const handleMatchWholeWordToggle = () => {
+  const handleMatchWholeWordToggle = async () => {
     setMatchWholeWord(!matchWholeWord);
     // Re-filter current search results
     if (searchQuery) {
-      const filtered = filterStopsByName(stops, searchQuery, !matchWholeWord).slice(0, 5);
+      const filtered = await searchStopsFromDB(searchQuery, 5);
       setSearchResults(filtered);
     }
   };
-
-  // Filter stops list
-  useEffect(() => {
-    const filtered = filterStopsByName(stops, stopSearchQuery, matchWholeWord);
-    setFilteredStops(filtered);
-  }, [stopSearchQuery, stops, matchWholeWord]);
-
-  // Filter routes list
-  useEffect(() => {
-    if (routeSearchQuery) {
-      const filtered = routes.filter(route =>
-        route.name.toLowerCase().includes(routeSearchQuery.toLowerCase())
-      );
-      setFilteredRoutes(filtered);
-    } else {
-      setFilteredRoutes(routes);
-    }
-  }, [routeSearchQuery, routes]);
-
-  // Search stops for route creation
-  useEffect(() => {
-    if (searchQuery.length > 0) {
-      const filtered = filterStopsByName(stops, searchQuery, matchWholeWord).slice(0, 5);
-      setSearchResults(filtered);
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchQuery, stops, matchWholeWord]);
 
   // Initialize suggestions arrays
   useEffect(() => {
@@ -1810,7 +1814,7 @@ const handleAddMultipleStops = async (stopsFromFile) => {
         `• "${candidate.name}" — within 50 m of existing stop "${existing.name}"`),
     ];
     alert(
-      `❌ No stops were added — all selected stops already exist in the database:\n\n` +
+      `No stops were added — all selected stops already exist in the database:\n\n` +
       lines.join('\n')
     );
     return;
@@ -1842,14 +1846,14 @@ const handleAddMultipleStops = async (stopsFromFile) => {
 
   let message = '';
   if (fail === 0) {
-    message = `✅ Added ${ok} stop${ok !== 1 ? 's' : ''} successfully!`;
+    message = `Added ${ok} stop${ok !== 1 ? 's' : ''} successfully!`;
   } else {
-    message = `⚠️ Added ${ok}, failed to save ${fail} (see console for details).`;
+    message = `Added ${ok}, failed to save ${fail} (see console for details).`;
   }
 
   if (skippedLines.length > 0) {
     message +=
-      `\n\n⚠️ ${skippedLines.length} stop${skippedLines.length !== 1 ? 's' : ''} skipped — already in the database:\n` +
+      `\n\n${skippedLines.length} stop${skippedLines.length !== 1 ? 's' : ''} skipped — already in the database:\n` +
       skippedLines.join('\n');
   }
 
@@ -1915,41 +1919,74 @@ const handleAddSearchedLocation = () => {
     }
   }, []);
 
-  // Filter stops when search query changes
+  // Filter stops when search query changes — queries DB so search works across all pages
   useEffect(() => {
-    if (stopSearchQuery) {
-      const filtered = stops.filter(stop =>
-        stop.name.toLowerCase().includes(stopSearchQuery.toLowerCase())
-      );
-      setFilteredStops(filtered);
-    } else {
+    if (!stopSearchQuery.trim()) {
       setFilteredStops(stops);
+      setSpotlightStop(null);   // clear spotlight when search is cleared
+      return;
     }
-  }, [stopSearchQuery, stops]);
+    setIsSearchingStops(true);
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await supabase
+          .from('stops')
+          .select('*')
+          .ilike('name', `%${stopSearchQuery}%`)
+          .order('name')
+          .limit(200);
+        setFilteredStops(data || []);
+      } catch {
+        setFilteredStops([]);
+      } finally {
+        setIsSearchingStops(false);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [stopSearchQuery]);
 
-  // Filter routes when search query changes
+  // Filter routes when search query changes — queries DB so search works across all pages
   useEffect(() => {
-    if (routeSearchQuery) {
-      const filtered = routes.filter(route =>
-        route.name.toLowerCase().includes(routeSearchQuery.toLowerCase())
-      );
-      setFilteredRoutes(filtered);
-    } else {
+    if (!routeSearchQuery.trim()) {
       setFilteredRoutes(routes);
+      setSpotlightRoute(null);  // clear spotlight when search is cleared
+      return;
     }
-  }, [routeSearchQuery, routes]);
+    setIsSearchingRoutes(true);
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await supabase
+          .from('routes')
+          .select(`
+            *,
+            route_stops(
+              stop_order,
+              fare_to_next,
+              distance_to_next,
+              stops(*)
+            )
+          `)
+          .ilike('name', `%${routeSearchQuery}%`)
+          .order('created_at', { ascending: false })
+          .limit(200);
+        setFilteredRoutes(data || []);
+      } catch {
+        setFilteredRoutes([]);
+      } finally {
+        setIsSearchingRoutes(false);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [routeSearchQuery]);
 
-  // Search stops for route creation
+  // Search stops for route creation — DB-side so it finds any stop regardless of page
   useEffect(() => {
     if (searchQuery.length > 0) {
-      const filtered = stops.filter(stop =>
-        stop.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ).slice(0, 5);
-      setSearchResults(filtered);
+      searchStopsFromDB(searchQuery, 5).then(setSearchResults);
     } else {
       setSearchResults([]);
     }
-  }, [searchQuery, stops]);
+  }, [searchQuery]);
 
   // Auto-calculate distances when stops change
   useEffect(() => {
@@ -2463,7 +2500,7 @@ const findStopsUsingNominatim = async (region) => {
 
     if (stopsToSave.length === 0) {
       alert(
-        `❌ All selected stops already exist in the database and were not added:\n\n` +
+        ` All selected stops already exist in the database and were not added:\n\n` +
         skippedLines.join('\n')
       );
       return;
@@ -2484,10 +2521,10 @@ const findStopsUsingNominatim = async (region) => {
 
       if (error) throw error;
 
-      let message = `✅ ${stopsToSave.length} stop(s) added successfully!`;
+      let message = ` ${stopsToSave.length} stop(s) added successfully!`;
       if (skippedLines.length > 0) {
         message +=
-          `\n\n⚠️ ${skippedLines.length} stop(s) were skipped because they already exist:\n\n` +
+          `\n\n ${skippedLines.length} stop(s) were skipped because they already exist:\n\n` +
           skippedLines.join('\n');
       }
       alert(message);
@@ -2896,7 +2933,7 @@ const handleSavePlottedRoute = async () => {
       .map(rs => rs.stops?.name ?? 'Unknown')
       .join(' → ');
     alert(
-      `❌ Cannot create route — a route with this name already exists:\n\n` +
+      ` Cannot create route — a route with this name already exists:\n\n` +
       `• "${existing.name}"\n` +
       `  Stops: ${existingPath || 'N/A'}\n\n` +
       `Please choose a different route name.`
@@ -2907,7 +2944,7 @@ const handleSavePlottedRoute = async () => {
   if (dupByStops.length > 0) {
     const existing = dupByStops[0];
     alert(
-      `❌ Cannot create route — a route with the exact same stop sequence already exists:\n\n` +
+      ` Cannot create route — a route with the exact same stop sequence already exists:\n\n` +
       `• "${existing.name}"\n\n` +
       `Please adjust the stops involved or edit the existing route instead.`
     );
@@ -3112,16 +3149,29 @@ const handleSavePlottedRoute = async () => {
 
 
   // Load functions
-  const loadStops = async () => {
+  const loadStops = async (page = 0) => {
     setIsLoading(true);
     try {
+      // Always refresh the total count
+      const { count } = await supabase
+        .from('stops')
+        .select('*', { count: 'exact', head: true });
+      setTotalStopsCount(count || 0);
+
+      const from = page * PAGE_SIZE;
+      const to   = from + PAGE_SIZE - 1;
+
       const { data, error } = await supabase
         .from('stops')
         .select('*')
-        .order('name');
-      
+        .order('name')
+        .range(from, to);
+
       if (error) throw error;
       setStops(data || []);
+      setStopsPage(page);
+      // If not searching, sync the displayed list with the new page
+      if (!stopSearchQuery.trim()) setFilteredStops(data || []);
     } catch (error) {
       alert('Failed to load stops');
     } finally {
@@ -3129,8 +3179,17 @@ const handleSavePlottedRoute = async () => {
     }
   };
 
-  const loadRoutes = async () => {
+  const loadRoutes = async (page = 0) => {
     try {
+      // Always refresh the total count
+      const { count } = await supabase
+        .from('routes')
+        .select('*', { count: 'exact', head: true });
+      setTotalRoutesCount(count || 0);
+
+      const from = page * PAGE_SIZE;
+      const to   = from + PAGE_SIZE - 1;
+
       const { data, error } = await supabase
         .from('routes')
         .select(`
@@ -3142,10 +3201,14 @@ const handleSavePlottedRoute = async () => {
             stops(*)
           )
         `)
-        .order('created_at', { ascending: false });
-      
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
       if (error) throw error;
       setRoutes(data || []);
+      setRoutesPage(page);
+      // If not searching, sync the displayed list with the new page
+      if (!routeSearchQuery.trim()) setFilteredRoutes(data || []);
     } catch (error) {
       console.error('Error loading routes:', error);
     }
@@ -3278,7 +3341,7 @@ const handleForgotPassword = async () => {
     if (byName.length > 0) {
       const existing = byName[0];
       alert(
-        `❌ Cannot add stop — a stop with this name already exists:\n\n` +
+        ` Cannot add stop — a stop with this name already exists:\n\n` +
         `• "${existing.name}"\n` +
         `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
         `Please use a different name or select the existing stop instead.`
@@ -3289,7 +3352,7 @@ const handleForgotPassword = async () => {
     if (byCoords.length > 0) {
       const existing = byCoords[0];
       alert(
-        `❌ Cannot add stop — another stop already exists within 50 m of this location:\n\n` +
+        ` Cannot add stop — another stop already exists within 50 m of this location:\n\n` +
         `• "${existing.name}"\n` +
         `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
         `Please choose a different location or use the existing stop instead.`
@@ -3343,7 +3406,7 @@ const handleForgotPassword = async () => {
     if (byName.length > 0) {
       const existing = byName[0];
       alert(
-        `❌ Cannot update stop — another stop with this name already exists:\n\n` +
+        ` Cannot update stop — another stop with this name already exists:\n\n` +
         `• "${existing.name}"\n` +
         `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
         `Please choose a different name.`
@@ -3354,7 +3417,7 @@ const handleForgotPassword = async () => {
     if (byCoords.length > 0) {
       const existing = byCoords[0];
       alert(
-        `❌ Cannot update stop — another stop already exists within 50 m of the new location:\n\n` +
+        ` Cannot update stop — another stop already exists within 50 m of the new location:\n\n` +
         `• "${existing.name}"\n` +
         `  Location: (${existing.latitude.toFixed(5)}, ${existing.longitude.toFixed(5)})\n\n` +
         `Please choose a different location.`
@@ -3481,7 +3544,7 @@ const handleAddRoute = async () => {
         .map(rs => rs.stops?.name ?? 'Unknown')
         .join(' → ');
       alert(
-        `❌ Cannot create route — a route with this name already exists:\n\n` +
+        ` Cannot create route — a route with this name already exists:\n\n` +
         `• "${existing.name}"\n` +
         `  Stops: ${existingPath || 'N/A'}\n\n` +
         `Please choose a different route name.`
@@ -3492,7 +3555,7 @@ const handleAddRoute = async () => {
     if (dupByStops.length > 0) {
       const existing = dupByStops[0];
       alert(
-        `❌ Cannot create route — a route with the exact same stop sequence already exists:\n\n` +
+        ` Cannot create route — a route with the exact same stop sequence already exists:\n\n` +
         `• "${existing.name}"\n\n` +
         `Please adjust the stops involved or edit the existing route instead.`
       );
@@ -3698,7 +3761,7 @@ const handleAddRoute = async () => {
     setShowEnhancedRouteFinder(false);
 
   } catch (error) {
-    console.error('❌ Error finding enhanced routes:', error);
+    console.error(' Error finding enhanced routes:', error);
     alert('Failed to find routes: ' + error.message);
   } finally {
     setIsLoading(false);
@@ -3760,7 +3823,7 @@ const handleAddRoute = async () => {
       ? routesWithDuplicateCheck.filter(route => !route.isDuplicate)
       : routesWithDuplicateCheck;
 
-    console.log('✅ Routes after duplicate check:', filteredRoutes.length);
+    console.log(' Routes after duplicate check:', filteredRoutes.length);
     return filteredRoutes;
   };
 
@@ -3773,7 +3836,7 @@ const generateRoutesForStopCount = (startStop, destinationStop, allStops, interm
       const directRoute = createDirectRoute(startStop, destinationStop);
       if (directRoute) {
         routes.push(directRoute);
-        console.log('🛣️ Added direct route');
+        console.log('Added direct route');
       }
       return routes;
     }
@@ -3825,7 +3888,7 @@ const generateRoutesForStopCount = (startStop, destinationStop, allStops, interm
     }
 
     if (candidateStops.length < intermediateCount) {
-      console.log(`⚠️ Not enough candidate stops for ${intermediateCount} intermediates`);
+      console.log(` Not enough candidate stops for ${intermediateCount} intermediates`);
       return routes;
     }
 
@@ -4109,7 +4172,7 @@ const discoverAutomaticRoutes = async () => {
     setShowEnhancedRouteFinder(false);
 
   } catch (error) {
-    console.error('❌ Error in automatic route discovery:', error);
+    console.error(' Error in automatic route discovery:', error);
     alert('Failed to discover routes: ' + error.message);
   } finally {
     setIsLoading(false);
@@ -4175,7 +4238,7 @@ const generateAutomaticRoutes = (allStops, config) => {
   const uniqueRoutes = removeDuplicateRoutes(routes);
   const sortedRoutes = sortRoutesByDiversity(uniqueRoutes, config.diversity);
   
-  console.log('✅ Final automatic routes:', sortedRoutes.length);
+  console.log(' Final automatic routes:', sortedRoutes.length);
   return sortedRoutes.slice(0, config.maxRoutes);
 };
 
@@ -4897,10 +4960,10 @@ const generateGeographicRoutes = (startStop, destinationStop, candidateStops, in
   };
 
   // Search handler for edit mode search box
-  const handleEditSearchChange = (query) => {
+  const handleEditSearchChange = async (query) => {
     setEditSearchQuery(query);
     if (query.length > 0) {
-      const filtered = filterStopsByName(stops, query, matchWholeWord).slice(0, 5);
+      const filtered = await searchStopsFromDB(query, 5);
       setEditSearchResults(filtered);
     } else {
       setEditSearchResults([]);
@@ -4956,7 +5019,7 @@ const handleUpdateRoute = async () => {
         .map(rs => rs.stops?.name ?? 'Unknown')
         .join(' → ');
       alert(
-        `❌ Cannot update route — another route with this name already exists:\n\n` +
+        ` Cannot update route — another route with this name already exists:\n\n` +
         `• "${existing.name}"\n` +
         `  Stops: ${existingPath || 'N/A'}\n\n` +
         `Please choose a different route name.`
@@ -4967,7 +5030,7 @@ const handleUpdateRoute = async () => {
     if (dupByStops.length > 0) {
       const existing = dupByStops[0];
       alert(
-        `❌ Cannot update route — another route with the exact same stop sequence already exists:\n\n` +
+        ` Cannot update route — another route with the exact same stop sequence already exists:\n\n` +
         `• "${existing.name}"\n\n` +
         `Please adjust the stops involved.`
       );
@@ -5173,7 +5236,7 @@ const findRoutesBetweenStops = async (startName, destinationName) => {
     setShowRouteFinder(false);
 
   } catch (error) {
-    console.error('❌ Error finding routes:', error);
+    console.error(' Error finding routes:', error);
     alert('Failed to find routes: ' + error.message);
   } finally {
     setIsLoading(false);
@@ -5232,7 +5295,7 @@ const generateDiverseRouteOptions = (startStop, destinationStop, allStops) => {
       id: `found-route-${Date.now()}-${index}`
     }));
   
-  console.log('✅ Generated diverse routes:', sortedRoutes.length);
+  console.log(' Generated diverse routes:', sortedRoutes.length);
   return sortedRoutes;
 };
 
@@ -5686,7 +5749,7 @@ const handleSaveSelectedRoutes = async () => {
         .map(r => `• ${r.name} (${r.type}) — ${r.duplicateReason}`)
         .join('\n');
       alert(
-        `ℹ️ The following ${duplicateRoutes.length} route(s) already exist and will NOT be added:\n\n` +
+        `The following ${duplicateRoutes.length} route(s) already exist and will NOT be added:\n\n` +
         duplicateNames
       );
     }
@@ -5887,8 +5950,28 @@ return (
       <div className="map-container">
           <MapComponent
             center={MAP_CONFIG.center}
-            stops={stops}
-            routes={routes}
+            stops={(() => {
+              let mapStops = [...stops];
+              // Add spotlight stop (from stop search) if not already in page
+              if (spotlightStop && !mapStops.some(s => s.id === spotlightStop.id)) {
+                mapStops = [...mapStops, spotlightStop];
+              }
+              // Add all stops of a spotlight route that aren't in the current page
+              if (spotlightRoute?.route_stops) {
+                spotlightRoute.route_stops.forEach(rs => {
+                  const s = rs.stops;
+                  if (s && !mapStops.some(ms => ms.id === s.id)) {
+                    mapStops = [...mapStops, s];
+                  }
+                });
+              }
+              return mapStops;
+            })()}
+            routes={
+              spotlightRoute && !routes.some(r => r.id === spotlightRoute.id)
+                ? [...routes, spotlightRoute]
+                : routes
+            }
             searchedLocation={searchedLocation}
             selectedStop={editingStop || (newStop.latitude ? newStop : null)}
             previewStop={excelPreviewStop || previewStop}
@@ -6145,16 +6228,27 @@ return (
                 )}
 
                 <div className="stops-list">
-                  <h3 className="list-title">Existing Stops ({stops.length})</h3>
+                  <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', flexWrap:'wrap', gap:'4px', marginBottom:'6px' }}>
+                    <h3 className="list-title" style={{ margin:0 }}>
+                      Existing Stops
+                      <span style={{ fontWeight:400, fontSize:'13px', color:'#6b7280', marginLeft:'4px' }}>({totalStopsCount} total)</span>
+                    </h3>
+                    {!stopSearchQuery.trim() && totalStopsCount > 0 && (
+                      <span style={{ fontSize:'12px', color:'#9ca3af' }}>
+                        {stopsPage * PAGE_SIZE + 1}–{Math.min((stopsPage + 1) * PAGE_SIZE, totalStopsCount)} of {totalStopsCount}
+                      </span>
+                    )}
+                  </div>
                   <div className="search-box-container">
                     <div className="search-container">
                       <Search size={20} color="#6b7280" />
                       <input
                         className="search-input"
-                        placeholder="Search stops..."
+                        placeholder="Search all stops in database…"
                         value={stopSearchQuery}
                         onChange={(e) => setStopSearchQuery(e.target.value)}
                       />
+                      {isSearchingStops && <div className="spinner-small"></div>}
                       <button
                         className={`match-word-button ${matchWholeWord ? 'match-word-active' : ''}`}
                         onClick={() => setMatchWholeWord(!matchWholeWord)}
@@ -6176,8 +6270,16 @@ return (
                           }}
                           onMouseLeave={() => setHoveredStopId(null)}
                           onClick={() => {
-                            setSelectedStopId(prev => prev === stop.id ? null : stop.id);
+                            const toggling = selectedStopId === stop.id;
+                            setSelectedStopId(toggling ? null : stop.id);
                             setPanToLocation({ lat: stop.latitude, lng: stop.longitude });
+                            // If this stop came from a DB search (not in current page),
+                            // spotlight it so its marker appears on the map
+                            if (!toggling && !stops.some(s => s.id === stop.id)) {
+                              setSpotlightStop(stop);
+                            } else if (toggling) {
+                              setSpotlightStop(null);
+                            }
                           }}
                           style={{ cursor: 'pointer', userSelect: 'none' }}
                         >
@@ -6225,6 +6327,41 @@ return (
                       </React.Fragment>
                     ))}
                   </div>
+                  {/* ── Stops pagination — sticky at the bottom of the panel ── */}
+                  {!stopSearchQuery.trim() && totalStopsCount > PAGE_SIZE && (
+                    <div style={{
+                      position: 'sticky',
+                      bottom: -24,
+                      background: '#fff',
+                      borderTop: '1px solid #e5e7eb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      padding: '8px 0 4px',
+                      zIndex: 10,
+                    }}>
+                      <button
+                        className="cancel-button"
+                        style={{ flex: 'none', minWidth: '90px', opacity: stopsPage === 0 || isLoading ? 0.4 : 1 }}
+                        disabled={stopsPage === 0 || isLoading}
+                        onClick={() => loadStops(stopsPage - 1)}
+                      >
+                        ← Previous
+                      </button>
+                      <span style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center' }}>
+                        Page {stopsPage + 1} / {Math.ceil(totalStopsCount / PAGE_SIZE)}
+                      </span>
+                      <button
+                        className="save-button"
+                        style={{ flex: 'none', minWidth: '90px', opacity: (stopsPage + 1) * PAGE_SIZE >= totalStopsCount || isLoading ? 0.4 : 1 }}
+                        disabled={(stopsPage + 1) * PAGE_SIZE >= totalStopsCount || isLoading}
+                        onClick={() => loadStops(stopsPage + 1)}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -6528,16 +6665,27 @@ return (
 
                 {!routeCreationMode && !editingRoute && !showEnhancedRouteFinder && (
                   <div className="routes-list">
-                    <h3 className="list-title">Existing Routes ({routes.length})</h3>
+                    <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', flexWrap:'wrap', gap:'4px', marginBottom:'6px' }}>
+                      <h3 className="list-title" style={{ margin:0 }}>
+                        Existing Routes
+                        <span style={{ fontWeight:400, fontSize:'13px', color:'#6b7280', marginLeft:'4px' }}>({totalRoutesCount} total)</span>
+                      </h3>
+                      {!routeSearchQuery.trim() && totalRoutesCount > 0 && (
+                        <span style={{ fontSize:'12px', color:'#9ca3af' }}>
+                          {routesPage * PAGE_SIZE + 1}–{Math.min((routesPage + 1) * PAGE_SIZE, totalRoutesCount)} of {totalRoutesCount}
+                        </span>
+                      )}
+                    </div>
                     <div className="search-box-container">
                       <div className="search-container">
                         <Search size={20} color="#6b7280" />
                         <input
                           className="search-input"
-                          placeholder="Search routes..."
+                          placeholder="Search all routes in database…"
                           value={routeSearchQuery}
                           onChange={(e) => setRouteSearchQuery(e.target.value)}
                         />
+                        {isSearchingRoutes && <div className="spinner-small"></div>}
                         <button
                           className={`match-word-button ${matchWholeWord ? 'match-word-active' : ''}`}
                           onClick={handleMatchWholeWordToggle}
@@ -6560,9 +6708,23 @@ return (
                             }}
                             onMouseLeave={() => setHoveredRouteId(null)}
                             onClick={() => {
-                              setSelectedRouteId(prev => prev === route.id ? null : route.id);
+                              const toggling = selectedRouteId === route.id;
+                              setSelectedRouteId(toggling ? null : route.id);
                               const mid = getRouteMidpoint(route);
                               if (mid) setPanToLocation(mid);
+                              // If this route came from a DB search (not in current page),
+                              // spotlight it so its path and stop markers appear on the map
+                              if (!toggling && !routes.some(r => r.id === route.id)) {
+                                setSpotlightRoute(route);
+                                // Also spotlight each stop of this route that isn't on the map
+                                const firstStop = route.route_stops?.[0]?.stops;
+                                if (firstStop && !stops.some(s => s.id === firstStop.id)) {
+                                  setSpotlightStop(firstStop);
+                                }
+                              } else if (toggling) {
+                                setSpotlightRoute(null);
+                                setSpotlightStop(null);
+                              }
                             }}
                             style={{ cursor: 'pointer', userSelect: 'none' }}
                           >
@@ -6763,6 +6925,41 @@ return (
                         </React.Fragment>
                       ))}
                     </div>
+                    {/* ── Routes pagination — sticky at the bottom of the panel ── */}
+                    {!routeSearchQuery.trim() && totalRoutesCount > PAGE_SIZE && (
+                      <div style={{
+                        position: 'sticky',
+                        bottom: -22,
+                        background: '#fff',
+                        borderTop: '1px solid #e5e7eb',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        padding: '8px 0 4px',
+                        zIndex: 10,
+                      }}>
+                        <button
+                          className="cancel-button"
+                          style={{ flex: 'none', minWidth: '90px', opacity: routesPage === 0 || isLoading ? 0.4 : 1 }}
+                          disabled={routesPage === 0 || isLoading}
+                          onClick={() => loadRoutes(routesPage - 1)}
+                        >
+                          ← Previous
+                        </button>
+                        <span style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center' }}>
+                          Page {routesPage + 1} / {Math.ceil(totalRoutesCount / PAGE_SIZE)}
+                        </span>
+                        <button
+                          className="save-button"
+                          style={{ flex: 'none', minWidth: '90px', opacity: (routesPage + 1) * PAGE_SIZE >= totalRoutesCount || isLoading ? 0.4 : 1 }}
+                          disabled={(routesPage + 1) * PAGE_SIZE >= totalRoutesCount || isLoading}
+                          onClick={() => loadRoutes(routesPage + 1)}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
 
                   </div>
                 )}
