@@ -1,10 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import 'leaflet-routing-machine';
-import { Route, MapPin, Search } from 'lucide-react';
+import { Route, MapPin, Search, Layers } from 'lucide-react';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -408,6 +408,7 @@ const MapComponent = ({
   onEditStopClick = null,
 }) => {
   const mapRef = useRef();
+  const [isSatellite, setIsSatellite] = useState(true);
 
   // ── Derived highlight state ──────────────────────────────────────────────
   // When actively editing a route, highlight that route; otherwise use hover/select
@@ -561,10 +562,19 @@ const MapComponent = ({
         style={{ width: '100%', height: '100%' }}
         ref={mapRef}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {isSatellite ? (
+          <TileLayer
+            key="satellite"
+            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        ) : (
+          <TileLayer
+            key="osm"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        )}
 
         <MapEvents
           onMapPress={onMapPress}
@@ -844,6 +854,37 @@ const MapComponent = ({
           </>
         )}
       </MapContainer>
+
+      {/* ── Layer toggle button ── */}
+      <button
+        onClick={() => setIsSatellite(prev => !prev)}
+        title={isSatellite ? 'Switch to Map view' : 'Switch to Satellite view'}
+        style={{
+          position: 'absolute',
+          bottom: '24px',
+          left: '16px',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'rgba(255,255,255,0.95)',
+          border: '2px solid rgba(0,0,0,0.15)',
+          borderRadius: '10px',
+          padding: '8px 14px',
+          cursor: 'pointer',
+          fontWeight: '600',
+          fontSize: '13px',
+          color: '#333',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          backdropFilter: 'blur(4px)',
+          transition: 'background 0.2s, box-shadow 0.2s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(240,240,240,0.98)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.95)'}
+      >
+        <Layers size={16} color="#6b21a8" />
+        {isSatellite ? 'Map View' : 'Satellite'}
+      </button>
     </div>
   );
 };
