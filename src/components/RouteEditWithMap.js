@@ -1,6 +1,7 @@
 import React from 'react';
 import { MapPin, Search, AlertCircle, X, Plus, Route, Eye, EyeOff, Info, Edit3 } from 'lucide-react';
 import RouteInfoForm from './RouteInfoForm';
+import { calculateDistance, calculateRouteDistance } from './MapComponent';
 
 
 const RouteEditWithMap = ({
@@ -45,11 +46,12 @@ const RouteEditWithMap = ({
   // ── Derived stats ────────────────────────────────────────────────────────────
 
   const calculateTotalDistance = () => {
-    let total = 0;
-    plottedStops.forEach(stop => {
-      if (stop.distanceToNext) total += parseFloat(stop.distanceToNext) || 0;
-    });
-    return total.toFixed(2);
+    const preComputed = plottedStops.reduce((sum, stop) => {
+      return sum + (parseFloat(stop.distanceToNext) || 0);
+    }, 0);
+    if (preComputed > 0) return preComputed.toFixed(2);
+    if (plottedStops.length < 2) return '0.00';
+    return calculateRouteDistance(plottedStops).toFixed(2);
   };
 
   const calculateTotalFare = () => {

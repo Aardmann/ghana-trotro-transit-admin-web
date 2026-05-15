@@ -550,12 +550,11 @@ const MapComponent = ({
           padding: '10px 20px',
         }}>
           <Route size={16} />
-          {isEditingRoute ? '✏️ Editing: ' : ''}{activeRoute.name}
+          {isEditingRoute ? 'Editing: ' : ''}{activeRoute.name}
           {isRouteSelected && !isEditingRoute ? ' — click card again to deselect' : ''}
         </div>
       )}
 
-      {/* ─────────────────── Leaflet Map ─────────────────────────────────── */}
       <MapContainer
         center={center}
         zoom={13}
@@ -565,7 +564,7 @@ const MapComponent = ({
         {isSatellite ? (
           <TileLayer
             key="satellite"
-            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            attribution='Tiles &copy; Esri, Maxar, Earthstar Geographics'
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           />
         ) : (

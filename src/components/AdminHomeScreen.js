@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './AdminHomeScreen.css';
-import MapComponent from './MapComponent';
+import MapComponent, { calculateDistance, calculateRouteDistance } from './MapComponent';
 import { MAP_CONFIG } from '../utils/constants';
 import { supabase } from '../config/supabase';
 import { 
@@ -32,32 +32,17 @@ import {
   Building,
   Hash,
   Type,
-  CalendarDays
+  CalendarDays,
+  Layers,
 } from 'lucide-react';
 import RouteCreationWithMap from './RouteCreationWithMap';
 import RouteEditWithMap from './RouteEditWithMap';
 import StopForm from './StopForm';
 import './StopForm.css';
-
-// Ghana regions
-const GHANA_REGIONS = [
-  { name: 'Greater Accra' },
-  { name: 'Ashanti' },
-  { name: 'Western' },
-  { name: 'Central' },
-  { name: 'Eastern'},
-  { name: 'Volta' },
-  { name: 'Northern' },
-  { name: 'Upper East' },
-  { name: 'Upper West'},
-  { name: 'Brong-Ahafo' },
-  { name: 'Western North' },
-  { name: 'Oti'},
-  { name: 'Ahafo' },
-  { name: 'Bono East' },
-  { name: 'Savannah' },
-  { name: 'North East'}
-];
+import CompositeRouteForm from './CompositeRouteForm';
+import EnhancedRouteFinder  from './EnhancedRouteFinder';
+import RouteSelectionModal from './RouteSelectionModal';
+import { GHANA_REGIONS, filterStopsByRegion } from './ghanaRegions';
 
 // Route Information Form Component
 const RouteInfoForm = ({
@@ -615,257 +600,6 @@ const RouteForm = ({
   );
 };
 
-const RouteSelectionModal = ({
-  visible,
-  foundRoutes,
-  selectedRoutes,
-  onRouteToggle,
-  onFareChange,
-  onSaveRoutes,
-  onCancel,
-  isLoading,
-  onAddReverseRoute,
-  onCloseReverseRoute,
-  currentPage,
-  routesPerPage,
-  onLoadMore,
-  hasMoreRoutes,
-  onRoutesPerPageChange,
-  currentSearchKey,
-  routeCache
-}) => {
-  if (!visible) return null;
-
-  const getRouteTypeLabel = (type) => {
-    switch (type) {
-      case 'direct': 
-      case 'direct_with_station':
-        return 'Direct Route';
-      case '1_intermediate': 
-      case '1_intermediate_with_station':
-        return '1 Stop Route';
-      case '2_intermediate': 
-      case '2_intermediate_with_station':
-        return '2 Stop Route';
-      case '3_intermediate': 
-      case '3_intermediate_with_station':
-        return '3 Stop Route';
-      default: 
-        if (type.includes('direct')) return 'Direct Route';
-        if (type.includes('intermediate')) {
-          const count = type.match(/\d+/)?.[0] || 'Unknown';
-          return `${count} Stop Route`;
-        }
-        return 'Standard Route';
-    }
-  };
-
-  const hasStations = (type) => {
-    return type.includes('_with_station');
-  };
-
-  const startIndex = 0;
-  const endIndex = (currentPage + 1) * routesPerPage;
-  const currentRoutes = foundRoutes.slice(0, endIndex);
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-container large-modal">
-        <div className="modal-header sticky-header">
-          <button className="back-button" onClick={onCancel}>
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className="modal-title">
-            Select Routes ({foundRoutes.length} total, showing {currentRoutes.length})
-          </h2>
-          <div style={{ width: 24 }} />
-        </div>
-        
-        <div className="search-info">
-          <Search size={16} color="#6b7280" />
-          <span className="search-info-text">
-            Showing {foundRoutes.length} routes • {routeCache.has(currentSearchKey) ? 'Cached results' : 'New search'}
-          </span>
-        </div>
-
-        <div className="batch-size-selector">
-          <label className="batch-size-label">Show per batch:</label>
-          <select 
-            className="batch-size-select"
-            value={routesPerPage}
-            onChange={(e) => onRoutesPerPageChange(parseInt(e.target.value))}
-          >
-            <option value={20}>20 routes</option>
-            <option value={50}>50 routes</option>
-            <option value={100}>100 routes</option>
-          </select>
-          <span className="batch-info">
-            Page {currentPage + 1} • Showing {Math.min((currentPage + 1) * routesPerPage, foundRoutes.length)} of {foundRoutes.length}
-          </span>
-        </div>
-
-        <div className="modal-actions-sticky">
-          <div className="selected-count">
-            {selectedRoutes.length} route(s) selected
-          </div>
-          <div className="sticky-buttons">
-            <button 
-              className="cancel-button"
-              onClick={onCancel}
-            >
-              Cancel
-            </button>
-            
-            <button 
-              className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
-              onClick={onSaveRoutes}
-              disabled={isLoading || selectedRoutes.length === 0}
-            >
-              {isLoading ? <div className="spinner"></div> : `Save ${selectedRoutes.length}`}
-            </button>
-          </div>
-        </div>
-
-        <div className="modal-content-with-sticky">
-          {currentRoutes.map((route, index) => (
-            <div key={route.id || index} className="route-option-container">
-              <button
-                className="route-checkbox"
-                onClick={() => onRouteToggle(index)}
-              >
-                <div className={`checkbox ${selectedRoutes.includes(index) ? 'checkbox-selected' : ''}`}>
-                  {selectedRoutes.includes(index) && (
-                    <Check size={16} color="#FFFFFF" />
-                  )}
-                </div>
-                <div className="route-header-info">
-                  <span className="route-option-title">
-                    Route {index + 1} • {route.totalDistance} km
-                    {hasStations(route.type) && (
-                      <span className="route-type-with-station">🚍 Station</span>
-                    )}
-                    {route.isDuplicate && (
-                      <span className="duplicate-badge"> Duplicate</span>
-                    )}
-                    {route.hasSubRoutes && (
-                      <span className="subroute-badge">🔗 Sub-routes</span>
-                    )}
-                  </span>
-                  <span className="route-type">
-                    {getRouteTypeLabel(route.type)} • {route.stops.length - 2} intermediate stops
-                  </span>
-                </div>
-              </button>
-              
-              {selectedRoutes.includes(index) && (
-                <div className="fare-section">
-                  <div className="fare-section-header">
-                    <span className="fare-section-title">Set Fares:</span>
-                    <div className="fare-section-actions">
-                      {!route.reverseRoute ? (
-                        <button
-                          className="reverse-route-button"
-                          onClick={() => onAddReverseRoute(index)}
-                        >
-                          <Route size={16} />
-                          Add Reverse Route
-                        </button>
-                      ) : (
-                        <button
-                          className="close-reverse-route-button"
-                          onClick={() => onCloseReverseRoute(index)}
-                        >
-                          <X size={16} />
-                          Remove Reverse
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {route.stops.map((stop, stopIndex) => (
-                    stopIndex < route.stops.length - 1 && (
-                      <div key={stopIndex} className="fare-input-row">
-                        <span className="fare-label">
-                          {stop.name} → {route.stops[stopIndex + 1].name}
-                        </span>
-                        <input
-                          className="fare-input-small"
-                          placeholder="GH₵ 0.00"
-                          value={route.fares[stopIndex]}
-                          onChange={(e) => onFareChange(index, stopIndex, e.target.value)}
-                          type="number"
-                          step="0.01"
-                        />
-                      </div>
-                    )
-                  ))}
-                  
-                  {route.reverseRoute && (
-                    <div className="reverse-route-section">
-                      <div className="reverse-route-header">
-                        <h4 className="reverse-route-title">Reverse Route</h4>
-                        <button
-                          className="close-reverse-button"
-                          onClick={() => onCloseReverseRoute(index)}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                      {route.reverseRoute.stops.map((stop, stopIndex) => (
-                        stopIndex < route.reverseRoute.stops.length - 1 && (
-                          <div key={stopIndex} className="fare-input-row reverse">
-                            <span className="fare-label">
-                              {stop.name} → {route.reverseRoute.stops[stopIndex + 1].name}
-                            </span>
-                            <input
-                              className="fare-input-small"
-                              placeholder="GH₵ 0.00"
-                              value={route.reverseRoute.fares[stopIndex]}
-                              onChange={(e) => onFareChange(index, stopIndex, e.target.value, true)}
-                              type="number"
-                              step="0.01"
-                            />
-                          </div>
-                        )
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              <span className="route-path">
-                {route.stops.map(stop => stop.name).join(' → ')}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {hasMoreRoutes && (
-          <div className="load-more-section">
-            <button 
-              className="load-more-button"
-              onClick={onLoadMore}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <div className="spinner"></div>
-              ) : (
-                <>
-                  <ArrowLeft size={20} className="load-more-icon" />
-                  Load Next {Math.min(routesPerPage, foundRoutes.length - currentRoutes.length)} Routes
-                  <ArrowLeft size={20} className="load-more-icon" />
-                </>
-              )}
-            </button>
-            <div className="progress-text">
-              Showing {currentRoutes.length} of {foundRoutes.length} routes
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 const AutomaticStopFinder = ({
   selectedRegion,
   onRegionChange,
@@ -1034,394 +768,6 @@ const AutomaticStopFinder = ({
   );
 };
 
-const EnhancedRouteFinder = ({
-  startPoints,
-  destinationPoints,
-  onStartPointChange,
-  onDestinationPointChange,
-  onAddStartPoint,
-  onAddDestinationPoint,
-  onRemoveStartPoint,
-  onRemoveDestinationPoint,
-  onFindRoutes,
-  onFindAutomaticRoutes,
-  onCancel,
-  isLoading,
-  stopSuggestions,
-  onStopSuggestionSelect,
-  routeConfig,
-  onRouteConfigChange,
-  onAddStopCount,
-  onRemoveStopCount,
-  selectedRegion,
-  onRegionChange,
-  automaticMode,
-  onToggleAutomaticMode,
-  routeCache,
-  currentSearchKey,
-  matchWholeWord,
-  onMatchWholeWordToggle
-}) => {
-  const currentCacheKey = generateCacheKey(startPoints, destinationPoints, routeConfig, selectedRegion, automaticMode);
-  const hasCachedResults = routeCache.has(currentCacheKey);
-  const cachedRouteCount = routeCache.get(currentCacheKey)?.length || 0;
-
-  return (
-    <div className="form-container">
-      <h2 className="form-title">Auto Route Finder</h2>
-
-      {hasCachedResults && (
-        <div className="cache-indicator">
-          <div className="cache-icon">📦</div>
-          <div className="cache-info">
-            <span className="cache-text">Cached results available</span>
-            <span className="cache-count">{cachedRouteCount} routes from previous search</span>
-          </div>
-        </div>
-      )}
-      
-      <div className="mode-toggle">
-        <button
-          className={`mode-button ${!automaticMode ? 'mode-active' : ''}`}
-          onClick={() => onToggleAutomaticMode(false)}
-        >
-          <MapPin size={16} />
-          Auto Search
-        </button>
-        <button
-          className={`mode-button ${automaticMode ? 'mode-active' : ''}`}
-          onClick={() => onToggleAutomaticMode(true)}
-        >
-          <Route size={16} />
-          Automatic Discovery
-        </button>
-      </div>
-
-      {!automaticMode ? (
-        <>
-          <p className="form-subtitle">Find routes between multiple start and destination points</p>
-          
-          <div className="input-group">
-            <label className="input-label">Search Region</label>
-            <select
-              className="region-select"
-              value={selectedRegion}
-              onChange={(e) => onRegionChange(e.target.value)}
-            >
-              <option value="">All Regions</option>
-              {GHANA_REGIONS.map(region => (
-                <option key={region.name} value={region.name}>
-                  {region.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="multiple-points-section">
-            <div className="points-header">
-              <label className="input-label">Start Points</label>
-              <button 
-                className="add-point-button"
-                onClick={onAddStartPoint}
-                type="button"
-              >
-                <Plus size={16} />
-                Add Start Point
-              </button>
-            </div>
-            
-            {startPoints.map((point, index) => (
-              <div key={index} className="point-input-group">
-                <div className="search-box-container">
-                  <div className="search-container">
-                    <MapPin size={20} color="#6b21a8" />
-                    <input
-                      className="search-input"
-                      placeholder={`Start Point ${index + 1} (e.g., 'Circle')`}
-                      value={point}
-                      onChange={(e) => onStartPointChange(e.target.value, index)}
-                    />
-                    {startPoints.length > 1 && (
-                      <button
-                        className="remove-point-button"
-                        onClick={() => onRemoveStartPoint(index)}
-                        type="button"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                    <button
-                      className={`match-word-button ${matchWholeWord ? 'match-word-active' : ''}`}
-                      onClick={onMatchWholeWordToggle}
-                      title={matchWholeWord ? "Matching whole words only" : "Match partial words"}
-                    >
-                      <Type size={16} />
-                      {matchWholeWord ? 'Whole Word' : 'Partial'}
-                    </button>
-                  </div>
-                  
-                  {stopSuggestions.start[index]?.length > 0 && (
-                    <div className="suggestions-container">
-                      {stopSuggestions.start[index].map((stop) => (
-                        <button
-                          key={stop.id}
-                          className="suggestion-item"
-                          onClick={() => onStopSuggestionSelect(stop.name, 'start', index)}
-                        >
-                          <MapPin size={16} color="#6b21a8" />
-                          <span className="suggestion-text">{stop.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="multiple-points-section">
-            <div className="points-header">
-              <label className="input-label">Destination Points</label>
-              <button 
-                className="add-point-button"
-                onClick={onAddDestinationPoint}
-                type="button"
-              >
-                <Plus size={16} />
-                Add Destination
-              </button>
-            </div>
-            
-            {destinationPoints.map((point, index) => (
-              <div key={index} className="point-input-group">
-                <div className="search-box-container">
-                  <div className="search-container">
-                    <MapPin size={20} color="#EF4444" />
-                    <input
-                      className="search-input"
-                      placeholder={`Destination Point ${index + 1} (e.g., 'Madina')`}
-                      value={point}
-                      onChange={(e) => onDestinationPointChange(e.target.value, index)}
-                    />
-                    {destinationPoints.length > 1 && (
-                      <button
-                        className="remove-point-button"
-                        onClick={() => onRemoveDestinationPoint(index)}
-                        type="button"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                    <button
-                      className={`match-word-button ${matchWholeWord ? 'match-word-active' : ''}`}
-                      onClick={onMatchWholeWordToggle}
-                      title={matchWholeWord ? "Matching whole words only" : "Match partial words"}
-                    >
-                      <Type size={16} />
-                      {matchWholeWord ? 'Whole Word' : 'Partial'}
-                    </button>
-                  </div>
-
-                  {stopSuggestions.destination[index]?.length > 0 && (
-                    <div className="suggestions-container">
-                      {stopSuggestions.destination[index].map((stop) => (
-                        <button
-                          key={stop.id}
-                          className="suggestion-item"
-                          onClick={() => onStopSuggestionSelect(stop.name, 'destination', index)}
-                        >
-                          <MapPin size={16} color="#EF4444" />
-                          <span className="suggestion-text">{stop.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="form-subtitle">Automatically discover routes based on your parameters</p>
-          
-            {/* <div className="auto-info-card">
-            <div className="auto-info-icon">
-              <Route size={24} color="#10b981" />
-            </div>
-            <div className="auto-info-content">
-              <h4 className="auto-info-title">Automatic Route Discovery</h4>
-                <p className="auto-info-text">
-                The system will automatically generate routes between popular stops in the selected region 
-                based on your configuration below. No need to specify start and end points!
-              </p> 
-            </div>
-          </div>*/}
-        </>
-      )}
-
-      <div className="config-section">
-        <h3 className="sub-section-title">Route Configuration</h3>
-        
-        <div className="config-grid">
-          <div className="config-item">
-            <label className="config-label">Max Routes to Find</label>
-            <select
-              className="config-select"
-              value={routeConfig.maxRoutes}
-              onChange={(e) => onRouteConfigChange('maxRoutes', parseInt(e.target.value))}
-            >
-              <option value={20}>20 Routes</option>
-              <option value={50}>50 Routes</option>
-              <option value={100}>100 Routes</option>
-            </select>
-          </div>
-          
-          <div className="config-item">
-            <label className="config-label">Include Station Routes</label>
-            <div className="checkbox-container">
-              <input
-                type="checkbox"
-                checked={routeConfig.includeStations}
-                onChange={(e) => onRouteConfigChange('includeStations', e.target.checked)}
-                className="checkbox-input"
-              />
-              <span className="checkbox-label">Find routes with stations</span>
-            </div>
-          </div>
-
-          <div className="config-item">
-            <label className="config-label">Route Diversity</label>
-            <select
-              className="config-select"
-              value={routeConfig.diversity}
-              onChange={(e) => onRouteConfigChange('diversity', e.target.value)}
-            >
-              <option value="balanced">Balanced</option>
-              <option value="shortest">Prioritize Shortest</option>
-              <option value="alternative">Prioritize Alternative</option>
-              <option value="stations">Prioritize Stations</option>
-              <option value="random">Randomized</option>
-            </select>
-          </div>
-
-          <div className="config-item">
-            <label className="config-label">Min Route Distance</label>
-            <select
-              className="config-select"
-              value={routeConfig.minDistance}
-              onChange={(e) => onRouteConfigChange('minDistance', parseFloat(e.target.value))}
-            >
-              <option value={0}>Any Distance</option>
-              <option value={2}>2+ km</option>
-              <option value={5}>5+ km</option>
-              <option value={10}>10+ km</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="stop-count-section">
-          <label className="config-label">Find Routes With These Stop Counts:</label>
-          <div className="stop-counts-container">
-            {routeConfig.stopCounts.map((count, index) => (
-              <div key={index} className="stop-count-item">
-                <span className="stop-count-text">
-                  {count === 0 ? 'Direct' : `${count} stops`}
-                </span>
-                <button
-                  className="remove-stop-count"
-                  onClick={() => onRemoveStopCount(index)}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-          
-          <div className="add-stop-count">
-            <select
-              className="stop-count-select"
-              value={routeConfig.newStopCount}
-              onChange={(e) => onRouteConfigChange('newStopCount', parseInt(e.target.value))}
-            >
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(count => (
-                <option key={count} value={count}>
-                  {count === 0 ? 'Direct routes' : `${count} stops`}
-                </option>
-              ))}
-            </select>
-            <button
-              className="add-stop-count-button"
-              onClick={onAddStopCount}
-            >
-              <Plus size={16} />
-              Add
-            </button>
-          </div>
-        </div>
-
-        {automaticMode && (
-          <div className="input-group">
-            <label className="input-label">Target Region for Discovery</label>
-            <select
-              className="region-select"
-              value={selectedRegion}
-              onChange={(e) => onRegionChange(e.target.value)}
-            >
-              <option value="">All Regions</option>
-              {GHANA_REGIONS.map(region => (
-                <option key={region.name} value={region.name}>
-                  {region.name}
-                </option>
-              ))}
-            </select>
-            <p className="input-help">
-              Routes will be discovered between popular stops in this region
-            </p>
-          </div>
-        )}
-      </div>
-      
-      <div className="button-row">
-        <button 
-          className="cancel-button"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-        
-        {automaticMode ? (
-          <button 
-            className={`auto-discovery-button ${isLoading ? 'save-button-disabled' : ''}`}
-            onClick={onFindAutomaticRoutes}
-            disabled={isLoading}
-          >
-            {isLoading ? <div className="spinner"></div> : (
-              <>
-                <Route size={20} />
-                {hasCachedResults ? 'Reload Routes (500 max)' : 'Discover Routes (500 max)'}
-              </>
-            )}
-          </button>
-        ) : (
-          <button 
-            className={`save-button ${isLoading ? 'save-button-disabled' : ''}`}
-            onClick={onFindRoutes}
-            disabled={isLoading || startPoints.filter(p => p.trim()).length === 0 || destinationPoints.filter(p => p.trim()).length === 0}
-          >
-              {isLoading ? <div className="spinner"></div> : ( 
-                <>
-                <MapPin size={20} />
-              {hasCachedResults ? 'Reload Routes (500 max)' : 'Find Routes (500 max)'}
-                </>
-              )}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
-
 const generateCacheKey = (startPoints, destinationPoints, config, region, automaticMode) => {
   if (automaticMode) {
     return `auto_${region}_${config.stopCounts.join('-')}_${config.includeStations}_${config.minDistance}`;
@@ -1535,7 +881,9 @@ const AdminHomeScreen = () => {
     newStopCount: 0,
     diversity: 'balanced',
     minDistance: 0,
-    excludeExisting: true
+    excludeExisting: true,
+    autoComposite: false, // NEW: also generate chained composite routes
+    dbCompositeOnly: false,   // ← chains existing DB routes where last-stop = first-stop
   });
   const [routeFinderRegion, setRouteFinderRegion] = useState('');
   const [usedRoutePairs, setUsedRoutePairs] = useState(new Set());
@@ -1557,6 +905,8 @@ const AdminHomeScreen = () => {
   const [routeCreationMode, setRouteCreationMode] = useState(null); // 'plotting' or 'selecting'
   const [plottedStops, setPlottedStops] = useState([]); // Stops plotted on map
   const [currentPlottingStop, setCurrentPlottingStop] = useState(null);
+  // Track whether the admin has manually typed a route name (prevents auto-fill from overwriting)
+  const userEditedRouteName = useRef(false);
 
   // Route editing with map state (mirrors creation state but for edit mode)
   const [editRouteCreationMode, setEditRouteCreationMode] = useState(null); // 'plotting' | 'selecting' | null
@@ -1585,6 +935,15 @@ const AdminHomeScreen = () => {
   const [isSearchingStops, setIsSearchingStops] = useState(false);
   const [isSearchingRoutes, setIsSearchingRoutes] = useState(false);
   // ─────────────────────────────────────────────────────────────────────────
+
+  const [showCompositeForm, setShowCompositeForm] = useState(false);
+  
+  const [routeNames, setRouteNames] = useState({});
+ 
+  const handleRouteNameChange = (index, name) => {
+    setRouteNames(prev => ({ ...prev, [index]: name }));
+  };
+
 
 
   // Filter stops based on match whole word setting
@@ -1959,11 +1318,15 @@ const handleAddSearchedLocation = () => {
           .from('routes')
           .select(`
             *,
-            route_stops(
+            route_stops (
               stop_order,
               fare_to_next,
               distance_to_next,
-              stops(*)
+              stops (*)
+            ),
+            route_compositions!route_compositions_composite_fkey (
+              composition_order,
+              sub_route_id
             )
           `)
           .ilike('name', `%${routeSearchQuery}%`)
@@ -2001,6 +1364,29 @@ const handleAddSearchedLocation = () => {
       calculateEditRouteDistances();
     }
   }, [editRouteData.stops, editingRoute]);
+
+  // Auto-fill route name as "First Stop to Last Stop" while plotting,
+  // but only when the user hasn't manually typed a custom name.
+  useEffect(() => {
+    if (userEditedRouteName.current) return; // user typed something — leave it alone
+    if (plottedStops.length < 2) return;
+
+    const firstName = (() => {
+      const s = plottedStops[0];
+      if (!s.isNew) return s.name;
+      return s.tempName && s.tempName.trim() ? s.tempName.trim() : null;
+    })();
+    const lastName = (() => {
+      const s = plottedStops[plottedStops.length - 1];
+      if (!s.isNew) return s.name;
+      return s.tempName && s.tempName.trim() ? s.tempName.trim() : null;
+    })();
+
+    if (firstName && lastName) {
+      const autoName = `${firstName} to ${lastName}`;
+      setNewRoute(prev => ({ ...prev, name: autoName }));
+    }
+  }, [plottedStops]);
 
   useEffect(() => {
     // Initialize suggestions arrays to match the number of points
@@ -2541,19 +1927,7 @@ const findStopsUsingNominatim = async (region) => {
     }
   };
 
-  // Calculate distance between two coordinates using Haversine formula
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    return distance;
-  };
+  // calculateDistance and calculateRouteDistance are imported from MapComponent
 
   // Auto-calculate distances for route
   const calculateRouteDistances = () => {
@@ -2604,6 +1978,7 @@ const findStopsUsingNominatim = async (region) => {
     setCurrentPlottingStop(null);
     setShowBottomSheet(true);
     setActiveSection('routes');
+    userEditedRouteName.current = false; // reset so auto-fill kicks in on the new route
   };
 
   const calculateDistanceToNext = (currentStops, nextStop) => {
@@ -2619,118 +1994,74 @@ const findStopsUsingNominatim = async (region) => {
 
 const handleMapPressForRoute = (lat, lng) => {
   if (routeCreationMode === 'plotting') {
-    // Find if there's an existing stop nearby
-    const existingStop = stops.find(stop => 
-      Math.abs(stop.latitude - lat) < 0.001 &&
+    // Find if there's an existing stop nearby (within ~100 m)
+    const existingStop = stops.find(stop =>
+      Math.abs(stop.latitude  - lat) < 0.001 &&
       Math.abs(stop.longitude - lng) < 0.001
     );
 
-    const distanceToNext = calculateDistanceToNext(plottedStops, existingStop || { latitude: lat, longitude: lng });
-    
-    console.log('Plotting stop with calculated distance:', distanceToNext, 'km');
+    // Build the stop object to append — distanceToNext starts null;
+    // recalcPlottedDistances will set it correctly for the *previous* stop.
+    const newStop = existingStop
+      ? { ...existingStop, isNew: false, fareToNext: '', distanceToNext: null }
+      : {
+          id:            `temp-${Date.now()}`,
+          name:          '',
+          latitude:      lat,
+          longitude:     lng,
+          isNew:         true,
+          tempName:      '',
+          fareToNext:    '',
+          distanceToNext: null,
+        };
 
-    if (existingStop) {
-      // Add existing stop with calculated distance
-      const updatedPlottedStops = [...plottedStops, {
-        ...existingStop,
-        isNew: false,
-        distanceToNext: distanceToNext,
-        fareToNext: ''
-      }];
-      
-      setPlottedStops(updatedPlottedStops);
-      
-      // Update the previous stop's distance
-      if (updatedPlottedStops.length > 1) {
-        const updatedWithDistances = [...updatedPlottedStops];
-        const prevStopIndex = updatedWithDistances.length - 2;
-        updatedWithDistances[prevStopIndex] = {
-          ...updatedWithDistances[prevStopIndex],
-          distanceToNext: distanceToNext
-        };
-        setPlottedStops(updatedWithDistances);
-      }
-      
-      // Update newRoute state
-      setNewRoute(prev => ({
-        ...prev,
-        stops: [...prev.stops, existingStop],
-        fares: [...prev.fares, ''],
-        distances: [...prev.distances, distanceToNext]
-      }));
-    } else {
-      // Create new temporary stop with calculated distance
-      const newStop = {
-        id: `temp-${Date.now()}`,
-        name: '',
-        latitude: lat,
-        longitude: lng,
-        isNew: true,
-        tempName: '',
-        distanceToNext: distanceToNext,
-        fareToNext: ''
-      };
-      
-      const updatedPlottedStops = [...plottedStops, newStop];
-      setPlottedStops(updatedPlottedStops);
-      
-      // Update the previous stop's distance
-      if (updatedPlottedStops.length > 1) {
-        const updatedWithDistances = [...updatedPlottedStops];
-        const prevStopIndex = updatedWithDistances.length - 2;
-        updatedWithDistances[prevStopIndex] = {
-          ...updatedWithDistances[prevStopIndex],
-          distanceToNext: distanceToNext
-        };
-        setPlottedStops(updatedWithDistances);
-      }
-      
-      // Update newRoute state
-      setNewRoute(prev => ({
-        ...prev,
-        stops: [...prev.stops, { id: newStop.id, name: '', latitude: lat, longitude: lng }],
-        fares: [...prev.fares, ''],
-        distances: [...prev.distances, distanceToNext]
-      }));
-    }
+    // Recalculate ALL distances in one pass — no double-counting
+    const updated = recalcPlottedDistances([...plottedStops, newStop]);
+    setPlottedStops(updated);
+
+    // Keep newRoute state in sync
+    setNewRoute(prev => ({
+      ...prev,
+      stops:     [...prev.stops, { id: newStop.id, name: newStop.name || '', latitude: lat, longitude: lng }],
+      fares:     [...prev.fares, ''],
+      // distances array mirrors the segments (all stops except the last)
+      distances: updated.slice(0, -1).map(s => s.distanceToNext ?? '0.00'),
+    }));
+
   } else if (routeCreationMode === 'selecting') {
     handleSelectExistingStopFromMap(lat, lng);
   }
 };
   
   const handleSelectExistingStopFromMap = (lat, lng) => {
-    // Find the nearest existing stop (within 0.01 degrees ~ 1km)
+    // Find the nearest existing stop (within ~1 km)
     let nearestStop = null;
     let minDistance = Infinity;
   
     stops.forEach(stop => {
       const distance = calculateDistance(lat, lng, stop.latitude, stop.longitude);
-      if (distance < 1 && distance < minDistance) { // Within 1km
+      if (distance < 1 && distance < minDistance) {
         minDistance = distance;
         nearestStop = stop;
       }
     });
   
     if (nearestStop) {
-      // Check if stop is already in the route
-      const isAlreadyAdded = plottedStops.some(s =>
-        !s.isNew && s.id === nearestStop.id
-      );
+      const isAlreadyAdded = plottedStops.some(s => !s.isNew && s.id === nearestStop.id);
     
       if (!isAlreadyAdded) {
-        // Add the existing stop to the route
-        setPlottedStops(prev => [...prev, {
-          ...nearestStop,
-          isNew: false,
-          distanceToNext: calculateDistanceToNext(prev, nearestStop)
-        }]);
-      
-        // Also add to the newRoute state for consistency
+        // Append the stop then recompute ALL distances in one pass
+        const updated = recalcPlottedDistances([
+          ...plottedStops,
+          { ...nearestStop, isNew: false, fareToNext: '', distanceToNext: null },
+        ]);
+        setPlottedStops(updated);
+
         setNewRoute(prev => ({
           ...prev,
-          stops: [...prev.stops, nearestStop],
-          fares: [...prev.fares, ''],
-          distances: [...prev.distances, calculateDistanceToNext(prev.stops, nearestStop)]
+          stops:     [...prev.stops, nearestStop],
+          fares:     [...prev.fares, ''],
+          distances: updated.slice(0, -1).map(s => s.distanceToNext ?? '0.00'),
         }));
       } else {
         alert(`"${nearestStop.name}" is already in the route`);
@@ -2983,26 +2314,30 @@ const handleSavePlottedRoute = async () => {
       console.log('New stops saved successfully');
     }
 
-    // Get stop IDs (existing or newly created)
-    const stopIds = plottedStops.map(plottedStop => {
+    // Build finalStops directly from plottedStops.
+    // Existing stops already carry the full stop object; newly-created stops
+    // need to be looked up in savedStops (the freshly-inserted DB records).
+    const finalStops = plottedStops.map(plottedStop => {
       if (plottedStop.isNew) {
-        const saved = savedStops.find(s => 
+        const saved = savedStops.find(s =>
           Math.abs(s.latitude - plottedStop.latitude) < 0.001 &&
           Math.abs(s.longitude - plottedStop.longitude) < 0.001 &&
           s.name === plottedStop.tempName
         );
-        return saved?.id;
+        if (!saved) {
+          console.error('Could not find saved record for new stop:', plottedStop);
+          throw new Error(`Could not find saved record for new stop "${plottedStop.tempName}"`);
+        }
+        return saved;
       }
-      return plottedStop.id;
-    }).filter(id => id);
+      // Existing stop — plottedStop already IS the full stop object
+      return plottedStop;
+    });
 
-    if (stopIds.length !== plottedStops.length) {
-      console.error('Stop ID mismatch:', { stopIds, plottedStops });
-      throw new Error('Could not find all stops in database');
+    if (finalStops.length !== plottedStops.length) {
+      console.error('Stop resolution mismatch:', { finalStops, plottedStops });
+      throw new Error('Could not resolve all stops');
     }
-
-    // Get the actual stop objects
-    const finalStops = stopIds.map(id => savedStops.find(s => s.id === id)).filter(Boolean);
 
     // Create main route
     const mainRoute = {
@@ -3181,38 +2516,150 @@ const handleSavePlottedRoute = async () => {
 
   const loadRoutes = async (page = 0) => {
     try {
-      // Always refresh the total count
       const { count } = await supabase
         .from('routes')
         .select('*', { count: 'exact', head: true });
       setTotalRoutesCount(count || 0);
-
+  
       const from = page * PAGE_SIZE;
       const to   = from + PAGE_SIZE - 1;
-
+  
       const { data, error } = await supabase
         .from('routes')
         .select(`
           *,
-          route_stops(
+          route_stops (
             stop_order,
             fare_to_next,
             distance_to_next,
-            stops(*)
+            stops (*)
+          ),
+          route_compositions!route_compositions_composite_fkey (
+            composition_order,
+            sub_route_id
           )
         `)
         .order('created_at', { ascending: false })
         .range(from, to);
-
+  
       if (error) throw error;
+  
+      // Attach sub-route names by cross-referencing routes already loaded
+      // (best-effort — names appear once routes are loaded)
       setRoutes(data || []);
       setRoutesPage(page);
-      // If not searching, sync the displayed list with the new page
       if (!routeSearchQuery.trim()) setFilteredRoutes(data || []);
     } catch (error) {
       console.error('Error loading routes:', error);
     }
   };
+
+  const handleSaveCompositeRoute = async ({ routeName, selectedRoutes, mergedPreview, routeInfo }) => {
+  setIsLoading(true);
+  try {
+    // ── Duplicate-name check ──────────────────────────────────────────────
+    const { byName: dupByName } = checkDuplicateRoute(routeName, []);
+    if (dupByName.length > 0) {
+      const existing = dupByName[0];
+      alert(
+        `Cannot create route — a route named "${existing.name}" already exists.\n` +
+        `Please choose a different name.`
+      );
+      setIsLoading(false);
+      return;
+    }
+ 
+    // ── Compute totals from merged preview ────────────────────────────────
+    const totalFare = mergedPreview
+      .reduce((sum, s) => sum + (parseFloat(s.fare_to_next) || 0), 0);
+    const totalDistance = mergedPreview
+      .reduce((sum, s) => sum + (parseFloat(s.distance_to_next) || 0), 0);
+ 
+    // ── 1. Insert the composite route row ────────────────────────────────
+    const { data: routeData, error: routeError } = await supabase
+      .from('routes')
+      .insert([{
+        name:                routeName.trim(),
+        total_distance:      totalDistance,
+        total_fare:          totalFare,
+        is_composite:        true,
+        approved:            true,          // admin-created → auto-approved
+        description:         routeInfo.description        || null,
+        travel_time_minutes: routeInfo.travelTimeMinutes
+                               ? parseInt(routeInfo.travelTimeMinutes, 10)
+                               : null,
+        peak_hours:          routeInfo.peakHours          || null,
+        frequency:           routeInfo.frequency          || null,
+        vehicle_type:        routeInfo.vehicleType        || null,
+        notes:               routeInfo.notes              || null,
+        amenities:           routeInfo.amenities.length > 0
+                               ? routeInfo.amenities
+                               : null,
+        operating_hours:     routeInfo.operatingHours,
+        created_by:          user?.id ?? null,
+      }])
+      .select();
+ 
+    if (routeError) throw routeError;
+    const compositeRouteId = routeData[0].id;
+ 
+    // ── 2. Insert route_compositions ─────────────────────────────────────
+    //  This records WHICH sub-routes make up the composite and in what order.
+    //  The DB trigger will re-sync route_stops whenever a sub-route changes.
+    const compositions = selectedRoutes.map((route, index) => ({
+      composite_route_id: compositeRouteId,
+      sub_route_id:       route.id,
+      composition_order:  index + 1,
+    }));
+ 
+    const { error: compError } = await supabase
+      .from('route_compositions')
+      .insert(compositions);
+ 
+    if (compError) throw compError;
+ 
+    // ── 3. Insert route_stops for the composite ───────────────────────────
+    //  We insert these directly from the merged preview.  The DB trigger
+    //  (trg_sync_composites_on_route_stops) will keep them up-to-date
+    //  whenever any sub-route's stops or fares change in the future.
+    //  The trigger skips composite routes to avoid recursion, so our
+    //  initial insert here is safe.
+    const routeStops = mergedPreview.map((stop, index) => ({
+      route_id:         compositeRouteId,
+      stop_id:          stop.stop_id,
+      stop_order:       index,
+      fare_to_next:     index < mergedPreview.length - 1
+                          ? (parseFloat(stop.fare_to_next) ?? null)
+                          : null,
+      distance_to_next: index < mergedPreview.length - 1
+                          ? (parseFloat(stop.distance_to_next) ?? null)
+                          : null,
+    }));
+ 
+    const { error: stopsError } = await supabase
+      .from('route_stops')
+      .insert(routeStops);
+ 
+    if (stopsError) throw stopsError;
+ 
+    // ── Done ──────────────────────────────────────────────────────────────
+    alert(
+      `✅ Composite route "${routeName}" created successfully!\n\n` +
+      `It spans ${mergedPreview.length} stops across ${selectedRoutes.length} sub-routes.\n\n` +
+      `Any future changes to the sub-routes (fares, stop additions/removals, ` +
+      `distances) will automatically update this composite route.`
+    );
+ 
+    setShowCompositeForm(false);
+    loadRoutes();
+  } catch (error) {
+    console.error('Error creating composite route:', error);
+    alert('Failed to create composite route: ' + error.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
 const handleAdminLogin = async () => {
   if (!authEmail || !authPassword) {
@@ -3322,7 +2769,9 @@ const handleForgotPassword = async () => {
         setNewStop(prev => ({ ...prev, latitude: lat, longitude: lng }));
       }
       setIsSelectingLocation(false);
-      toggleBottomSheet(true);
+      // Re-open the sheet on the stops tab so the edit/add form is visible
+      setActiveSection('stops');
+      setShowBottomSheet(true);
     }
   };
 
@@ -3388,6 +2837,8 @@ const handleForgotPassword = async () => {
   const handleEditStop = (stop) => {
     setEditingStop(stop);
     setIsSelectingLocation(true);
+    // Close the sheet so the map is accessible; editingStop must stay set
+    setShowBottomSheet(false);
   };
 
   const handleUpdateStop = async () => {
@@ -3574,6 +3025,7 @@ const handleAddRoute = async () => {
           name: newRoute.name,
           total_distance,
           total_fare,
+          approved: true,
           description: newRoute.description || null,
           travel_time_minutes: newRoute.travelTimeMinutes ? parseInt(newRoute.travelTimeMinutes) : null,
           peak_hours: newRoute.peakHours || null,
@@ -3678,95 +3130,85 @@ const handleAddRoute = async () => {
     }
   };
 
- const findEnhancedRoutesBetweenStops = async () => {
+const findEnhancedRoutesBetweenStops = async () => {
   try {
     setIsLoading(true);
-    
+ 
     console.log('🔍 Finding enhanced routes with multiple points');
     console.log('📊 Start points:', startPoints);
     console.log('📊 Destination points:', destinationPoints);
-    
-    const cacheKey = generateCacheKey(startPoints, destinationPoints, routeFinderConfig, routeFinderRegion, automaticMode);
-    setCurrentSearchKey(cacheKey);
-    
-    // Check cache first
-    const cachedRoutes = routeCache.get(cacheKey);
-    if (cachedRoutes) {
-      console.log('📦 Using cached routes:', cachedRoutes.length);
-      handleShowRouteSelection(cachedRoutes);
-      setShowEnhancedRouteFinder(false);
+ 
+    // ── Fetch ALL stops fresh from DB (no pagination limit) ──────────────────
+    const { data: freshStops, error: fetchErr } = await supabase
+      .from('stops')
+      .select('id, name, latitude, longitude')
+      .order('name');
+ 
+    if (fetchErr) throw fetchErr;
+    const allDbStops = freshStops || [];
+    console.log(`📍 Fetched ${allDbStops.length} stops from DB`);
+ 
+    if (allDbStops.length < 2) {
+      alert('Not enough stops in the database to generate routes.');
       return;
     }
-    
+ 
     const allRoutes = [];
-    
-    // Generate routes for all combinations of start and destination points
-    for (const startName of startPoints.filter(name => name.trim())) {
-      for (const destinationName of destinationPoints.filter(name => name.trim())) {
-        // Find start and destination stops
-        const startStop = stops.find(stop => 
-          stop.name.toLowerCase().includes(startName.toLowerCase()) ||
-          startName.toLowerCase().includes(stop.name.toLowerCase())
+ 
+    for (const startName of startPoints.filter(n => n.trim())) {
+      for (const destinationName of destinationPoints.filter(n => n.trim())) {
+        // Match start stop against live DB data
+        const startStop = allDbStops.find(s =>
+          s.name.toLowerCase().includes(startName.toLowerCase()) ||
+          startName.toLowerCase().includes(s.name.toLowerCase())
         );
-        
-        const destinationStop = stops.find(stop => 
-          stop.name.toLowerCase().includes(destinationName.toLowerCase()) ||
-          destinationName.toLowerCase().includes(stop.name.toLowerCase())
+ 
+        const destinationStop = allDbStops.find(s =>
+          s.name.toLowerCase().includes(destinationName.toLowerCase()) ||
+          destinationName.toLowerCase().includes(s.name.toLowerCase())
         );
-
+ 
         if (!startStop || !destinationStop) {
-          console.log('Stop not found:', startName, destinationName);
+          console.log(`Stop not found: "${startName}" or "${destinationName}"`);
           continue;
         }
-
-        if (startStop.id === destinationStop.id) {
-          continue;
-        }
-
-        // Generate routes for this pair
+ 
+        if (startStop.id === destinationStop.id) continue;
+ 
         const routesForPair = await generateEnhancedRouteOptions(
-          startStop, 
-          destinationStop, 
-          stops,
+          startStop,
+          destinationStop,
+          allDbStops,
           routeFinderConfig
         );
-        
+ 
         allRoutes.push(...routesForPair);
-        
-        // Early exit if we have enough routes
         if (allRoutes.length >= 1000) break;
       }
       if (allRoutes.length >= 1000) break;
     }
-
-    // Remove duplicates and randomize
-    const uniqueRoutes = removeDuplicateRoutes(allRoutes);
-    const randomizedRoutes = randomizeRoutes(uniqueRoutes, routeFinderConfig.diversity);
-    
-    console.log('🛣️ Final routes found:', randomizedRoutes.length);
-
-    if (randomizedRoutes.length === 0) {
+ 
+    const uniqueRoutes  = removeDuplicateRoutes(allRoutes);
+    const sortedRoutes  = randomizeRoutes(uniqueRoutes, routeFinderConfig.diversity);
+ 
+    console.log('🛣️ Final routes found:', sortedRoutes.length);
+ 
+    if (sortedRoutes.length === 0) {
       alert('No routes found matching your criteria. Try adjusting your parameters.');
       return;
     }
-
-    // Limit to 500 routes maximum
-    const limitedRoutes = randomizedRoutes.slice(0, 500);
-    
-    // Cache the results
-    setRouteCache(prev => new Map(prev).set(cacheKey, limitedRoutes));
-    
-    // Use the new pagination handler
-    handleShowRouteSelection(limitedRoutes);
+ 
+    handleShowRouteSelection(sortedRoutes.slice(0, 500));
     setShowEnhancedRouteFinder(false);
-
+ 
   } catch (error) {
-    console.error(' Error finding enhanced routes:', error);
+    console.error('Error finding enhanced routes:', error);
     alert('Failed to find routes: ' + error.message);
   } finally {
     setIsLoading(false);
   }
 };
+
 
   // NEW: Randomize routes based on diversity setting
   const randomizeRoutes = (routes, diversity) => {
@@ -3812,10 +3254,15 @@ const handleAddRoute = async () => {
 
     // Check for duplicates in database
     const routesWithDuplicateCheck = await Promise.all(
-      routes.map(async (route) => ({
-        ...route,
-        isDuplicate: config.excludeExisting ? await checkRouteExists(route.stops) : false
-      }))
+      routes.map(async (route) => {
+        if (!config.excludeExisting) return route;
+        const { isDuplicate, existingFares } = await checkRouteExistsAndGetFares(route.stops);
+        // If this stop sequence exists in the DB, pre-fill fares from DB
+        if (isDuplicate && existingFares) {
+          return { ...route, isDuplicate: true, fares: existingFares };
+        }
+        return { ...route, isDuplicate };
+      })
     );
 
     // Filter out duplicates if configured
@@ -4116,64 +3563,251 @@ const generateOneIntermediateRoutes = (startStop, destinationStop, scoredStops, 
       stopCounts: prev.stopCounts.filter((_, i) => i !== index)
     }));
   };
-
-
+  
 const discoverAutomaticRoutes = async () => {
   try {
     setIsLoading(true);
-    
+ 
     console.log('🚀 Starting automatic route discovery with config:', routeFinderConfig);
     console.log('📍 Target region:', routeFinderRegion || 'All regions');
-    
-    const cacheKey = generateCacheKey([], [], routeFinderConfig, routeFinderRegion, true);
-    setCurrentSearchKey(cacheKey);
-    
-    // Check cache first
-    const cachedRoutes = routeCache.get(cacheKey);
-    if (cachedRoutes) {
-      console.log('📦 Using cached automatic routes:', cachedRoutes.length);
-      handleShowRouteSelection(cachedRoutes);
-      setShowEnhancedRouteFinder(false);
-      return;
-    }
-    
-    // Get stops based on region filter
-    let availableStops = stops;
+ 
+    // ── Fetch ALL stops fresh from the database ─────────────────────────────
+    const { data: freshStops, error: stopsError } = await supabase
+      .from('stops')
+      .select('id, name, latitude, longitude')
+      .order('name');
+ 
+    if (stopsError) throw stopsError;
+ 
+    let availableStops = freshStops || [];
+    console.log(`📍 Fetched ${availableStops.length} stops from DB`);
+ 
+    // ── Apply region filter using GEOGRAPHIC BOUNDS, not name matching ───────
     if (routeFinderRegion) {
-      // In a real implementation, you would filter stops by region
-      // For now, we'll use all stops and simulate regional filtering
-      console.log('Region-based filtering would be implemented here');
+      availableStops = filterStopsByRegion(availableStops, routeFinderRegion);
+      console.log(`📍 After region filter (${routeFinderRegion}): ${availableStops.length} stops`);
     }
-
+ 
     if (availableStops.length < 2) {
-      alert('Need at least 2 stops in the database to generate routes');
+      alert('Need at least 2 stops in the selected region to generate routes.');
       return;
     }
-
-    // Generate automatic routes with increased limit
-    const foundRoutes = generateAutomaticRoutes(availableStops, {
+ 
+    // ── Fetch existing routes to avoid creating duplicates ───────────────────
+    const { data: existingRoutes } = await supabase
+      .from('routes')
+      .select('id, name, route_stops(stop_id, stop_order)')
+      .eq('approved', true);
+ 
+    const existingSequences = new Set(
+      (existingRoutes || []).map(r =>
+        (r.route_stops || [])
+          .sort((a, b) => a.stop_order - b.stop_order)
+          .map(rs => rs.stop_id)
+          .join('-')
+      ).filter(Boolean)
+    );
+ 
+    // ── Generate routes ──────────────────────────────────────────────────────
+    const individualRoutes = generateAutomaticRoutes(availableStops, {
       ...routeFinderConfig,
-      maxRoutes: 500 // Increased to 500
+      maxRoutes: 500,
     });
-    
-    console.log('🛣️ Automatically discovered routes:', foundRoutes.length);
+ 
+    console.log('🛣️ Automatically discovered routes:', individualRoutes.length);
+ 
+    const newRoutes = individualRoutes.filter(r => {
+      const key = r.stops.map(s => s.id).join('-');
+      return !existingSequences.has(key);
+    });
+ 
+    console.log(`🔍 After duplicate filter: ${newRoutes.length} new routes`);
+ 
+    // ── Auto composite chaining (from generated routes) ──────────────────────
+    let allRoutes = newRoutes;
+    if (routeFinderConfig.autoComposite && newRoutes.length >= 2) {
+      const chainedRoutes = generateAutoChainedRoutes(newRoutes, 150);
+      console.log(`🔗 Adding ${chainedRoutes.length} auto-composite chained routes`);
+      allRoutes = [...newRoutes, ...chainedRoutes];
+    }
+ 
+    if (allRoutes.length === 0) {
+      alert(
+        'No new routes could be generated — all candidates already exist in the database, ' +
+        'or there are not enough stops. Try adjusting the stop counts or region.'
+      );
+      return;
+    }
+ 
+    handleShowRouteSelection(allRoutes.slice(0, 500));
+    setShowEnhancedRouteFinder(false);
+ 
+  } catch (error) {
+    console.error('Error in automatic route discovery:', error);
+    alert('Failed to discover routes: ' + error.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-    if (foundRoutes.length === 0) {
-      alert('No routes could be generated with the current parameters. Try adjusting stop counts or region.');
+const findCompositeOnlyRoutes = async () => {
+  try {
+    setIsLoading(true);
+    console.log('🔗 Starting DB Composite Only route generation');
+
+    // ── Fetch all approved routes WITH their stops and fares ─────────────────
+    const { data: dbRoutes, error } = await supabase
+      .from('routes')
+      .select(`
+        id, name, total_fare, total_distance,
+        route_stops (
+          stop_order,
+          fare_to_next,
+          distance_to_next,
+          stops ( id, name, latitude, longitude )
+        )
+      `)
+      .eq('approved', true)
+      .order('name');
+
+    if (error) throw error;
+
+    // Normalise: sort route_stops by stop_order and flatten to usable format
+    const normalised = (dbRoutes || [])
+      .map(r => {
+        const sortedStops = (r.route_stops || [])
+          .slice()
+          .sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0));
+
+        if (sortedStops.length < 2) return null; // skip malformed routes
+
+        const stops = sortedStops.map(rs => rs.stops).filter(Boolean);
+        const fares = sortedStops.slice(0, -1).map(rs => rs.fare_to_next?.toString() ?? '');
+        const distances = sortedStops.slice(0, -1).map(rs => rs.distance_to_next ?? 0);
+
+        return {
+          dbId: r.id,
+          dbName: r.name,
+          stops,
+          fares,
+          distances,
+          totalDistance: distances.reduce((s, d) => s + (parseFloat(d) || 0), 0).toFixed(2),
+          type: 'direct', // will be overridden for composites
+        };
+      })
+      .filter(Boolean);
+
+    console.log(`📦 Loaded ${normalised.length} valid routes from DB`);
+
+    if (normalised.length < 2) {
+      alert('Need at least 2 routes in the database to generate composites.');
       return;
     }
 
-    // Limit to 500 and cache
-    const limitedRoutes = foundRoutes.slice(0, 500);
-    setRouteCache(prev => new Map(prev).set(cacheKey, limitedRoutes));
-    
-    // Use the new pagination handler
-    handleShowRouteSelection(limitedRoutes);
+    // ── Apply region filter if selected ──────────────────────────────────────
+    let filteredRoutes = normalised;
+    if (routeFinderRegion) {
+      filteredRoutes = normalised.filter(r => {
+        // A route "belongs" to a region if its majority of stops are inside it
+        const inRegion = r.stops.filter(s => {
+          const region = GHANA_REGIONS.find(reg => reg.name === routeFinderRegion);
+          if (!region) return false;
+          const { minLat, maxLat, minLng, maxLng } = region.bounds;
+          return s.latitude >= minLat && s.latitude <= maxLat &&
+                 s.longitude >= minLng && s.longitude <= maxLng;
+        });
+        return inRegion.length >= Math.ceil(r.stops.length / 2);
+      });
+      console.log(`📍 After region filter (${routeFinderRegion}): ${filteredRoutes.length} routes`);
+    }
+
+    if (filteredRoutes.length < 2) {
+      alert(`Not enough routes found in ${routeFinderRegion || 'selected region'} to chain together.`);
+      return;
+    }
+
+    // ── Build index: first-stop-id → [route] ────────────────────────────────
+    const byFirstStop = new Map();
+    filteredRoutes.forEach(route => {
+      const firstId = route.stops[0]?.id;
+      if (!firstId) return;
+      if (!byFirstStop.has(firstId)) byFirstStop.set(firstId, []);
+      byFirstStop.get(firstId).push(route);
+    });
+
+    // ── Chain: for each route A, find routes B where A.lastStop = B.firstStop ─
+    const chains = [];
+    const usedKeys = new Set();
+    const maxChains = routeFinderConfig.maxRoutes || 100;
+
+    for (const routeA of filteredRoutes) {
+      if (chains.length >= maxChains) break;
+
+      const junctionStop = routeA.stops[routeA.stops.length - 1];
+      if (!junctionStop?.id) continue;
+
+      const continuations = byFirstStop.get(junctionStop.id) || [];
+
+      for (const routeB of continuations) {
+        if (chains.length >= maxChains) break;
+        if (routeB.dbId === routeA.dbId) continue;
+
+        const chainKey = `${routeA.dbId}__${routeB.dbId}`;
+        if (usedKeys.has(chainKey)) continue;
+        usedKeys.add(chainKey);
+
+        // Merge stops (junction stop appears once)
+        const mergedStops = [
+          ...routeA.stops,
+          ...routeB.stops.slice(1),
+        ];
+
+        // Merge fares — all inherited from DB (no manual entry needed)
+        const mergedFares = [
+          ...routeA.fares,
+          ...routeB.fares,
+        ];
+
+        // Merge distances
+        const mergedDistances = [
+          ...routeA.distances,
+          ...routeB.distances.slice(0, routeB.stops.length - 1),
+        ];
+
+        const totalDist = mergedDistances
+          .reduce((s, d) => s + (parseFloat(d) || 0), 0)
+          .toFixed(2);
+
+        chains.push({
+          stops: mergedStops,
+          fares: mergedFares,   // ← fares pre-filled from DB
+          totalDistance: totalDist,
+          type: 'auto_composite',
+          isAutoComposite: true,
+          hasSubRoutes: true,
+          chainedFrom: [routeA, routeB],
+          // Mark all fares as "from DB" so RouteSelectionModal can show them read-only
+          faresFromDB: true,
+        });
+      }
+    }
+
+    console.log(`🔗 Generated ${chains.length} DB composite routes`);
+
+    if (chains.length === 0) {
+      alert(
+        'No composite chains found. Make sure you have routes in the database where the ' +
+        'last stop of one route is the same as the first stop of another route.'
+      );
+      return;
+    }
+
+    handleShowRouteSelection(chains.slice(0, 500));
     setShowEnhancedRouteFinder(false);
 
   } catch (error) {
-    console.error(' Error in automatic route discovery:', error);
-    alert('Failed to discover routes: ' + error.message);
+    console.error('Error in DB composite route generation:', error);
+    alert('Failed to generate DB composite routes: ' + error.message);
   } finally {
     setIsLoading(false);
   }
@@ -4262,6 +3896,71 @@ const combineRoutes = (cachedRoutes, newRoutes, maxRoutes = 500) => {
   
   console.log(`🔄 Combined routes: ${cachedRoutes.length} cached + ${newRoutes.length} new = ${combined.length} total`);
   return combined;
+};
+
+/**
+ * Given an array of generated route suggestions, find pairs (A, B) where
+ * A's last stop id === B's first stop id, and produce a merged composite-style
+ * route suggestion. The last stop of A is shared (not duplicated) in the
+ * merged stop list, exactly like the manual CompositeRouteForm does.
+ *
+ * Distance is recalculated with the same Haversine formula used everywhere else.
+ */
+const generateAutoChainedRoutes = (routes, maxChains = 150) => {
+  const chains = [];
+  const usedKeys = new Set();
+
+  // Index: startStopId → [{ route, idx }]
+  const byStart = new Map();
+  routes.forEach((route, idx) => {
+    const startId = route.stops[0]?.id;
+    if (!startId) return;
+    if (!byStart.has(startId)) byStart.set(startId, []);
+    byStart.get(startId).push({ route, idx });
+  });
+
+  for (let i = 0; i < routes.length && chains.length < maxChains; i++) {
+    const routeA = routes[i];
+    const junctionStop = routeA.stops[routeA.stops.length - 1];
+    if (!junctionStop?.id) continue;
+
+    const continuations = byStart.get(junctionStop.id) || [];
+
+    for (const { route: routeB, idx: j } of continuations) {
+      if (j === i) continue;
+      const chainKey = `${i}__${j}`;
+      if (usedKeys.has(chainKey)) continue;
+      usedKeys.add(chainKey);
+
+      // Merge stops — junction stop appears once (from routeA end)
+      const mergedStops = [
+        ...routeA.stops,
+        ...routeB.stops.slice(1),
+      ];
+
+      // Merge fares — routeA covers A's segments, routeB covers B's segments
+      const mergedFares = [
+        ...routeA.fares,
+        ...routeB.fares,
+      ];
+
+      // Recompute total distance with the shared Haversine helper
+      const totalDistance = calculateRouteDistance(mergedStops).toFixed(2);
+
+      chains.push({
+        stops:           mergedStops,
+        fares:           mergedFares,
+        totalDistance,
+        type:            'auto_composite',
+        isAutoComposite: true,
+        // Keep a reference so the modal can show which routes were chained
+        chainedFrom:     [routeA, routeB],
+      });
+    }
+  }
+
+  console.log(`🔗 Auto-chained composite routes generated: ${chains.length}`);
+  return chains;
 };
 
   //Add reverse route handler
@@ -4738,53 +4437,44 @@ const generateGeographicRoutes = (startStop, destinationStop, candidateStops, in
     return combinations.slice(0, 5); // Limit combinations for performance
   };
 
-  const checkRouteExists = async (stops) => {
-    try {
-      const stopIds = stops.map(stop => stop.id);
-      
-      // Get all routes that contain any of these stops
-      const { data, error } = await supabase
-        .from('route_stops')
-        .select(`
-          route_id,
-          stop_id,
-          stop_order,
-          routes!inner(name)
-        `)
-        .in('stop_id', stopIds)
-        .order('stop_order');
-
-      if (error) throw error;
-
-      // Group by route_id and check for exact sequence match
-      const routesMap = {};
-      data.forEach(rs => {
-        if (!routesMap[rs.route_id]) {
-          routesMap[rs.route_id] = [];
-        }
-        routesMap[rs.route_id].push({
-          stop_id: rs.stop_id,
-          stop_order: rs.stop_order
-        });
-      });
-
-      // Check if any route has the exact same sequence
-      for (const routeId in routesMap) {
-        const routeStops = routesMap[routeId]
-          .sort((a, b) => a.stop_order - b.stop_order)
-          .map(rs => rs.stop_id);
-        
-        if (routeStops.join('-') === stopIds.join('-')) {
-          return true;
-        }
+  const checkRouteExistsAndGetFares = async (stops) => {
+  try {
+    const stopIds = stops.map(s => s.id);
+ 
+    const { data: existingRoutes } = await supabase
+      .from('routes')
+      .select(`
+        id, name,
+        route_stops (
+          stop_id, stop_order, fare_to_next, distance_to_next
+        )
+      `)
+      .eq('approved', true);
+ 
+    for (const route of (existingRoutes || [])) {
+      const sorted = (route.route_stops || [])
+        .slice()
+        .sort((a, b) => a.stop_order - b.stop_order);
+      const routeStopIds = sorted.map(rs => rs.stop_id);
+ 
+      if (
+        routeStopIds.length === stopIds.length &&
+        routeStopIds.every((id, i) => id === stopIds[i])
+      ) {
+        // Exact match — return the existing fares
+        return {
+          isDuplicate: true,
+          existingFares: sorted.map(rs => rs.fare_to_next?.toString() ?? ''),
+          existingDistances: sorted.map(rs => rs.distance_to_next ?? 0),
+        };
       }
-
-      return false;
-    } catch (error) {
-      console.error('Error checking route existence:', error);
-      return false;
     }
-  };
+ 
+    return { isDuplicate: false, existingFares: null, existingDistances: null };
+  } catch {
+    return { isDuplicate: false, existingFares: null, existingDistances: null };
+  }
+};
 
   // NEW: Get route pair key for tracking used routes
   const getRoutePairKey = (stops) => {
@@ -4863,6 +4553,25 @@ const generateGeographicRoutes = (startStop, destinationStop, candidateStops, in
       distances: newDistances
     }));
   };
+
+  // ── Shared distance helper ────────────────────────────────────────────────
+
+  /**
+   * Rebuild distanceToNext for every stop in a list using the same Haversine
+   * formula that MapComponent exports. The last stop always gets null.
+   * Use this whenever the plotted-stop list changes (add / remove / reorder).
+   */
+  const recalcPlottedDistances = (stops) =>
+    stops.map((stop, idx) => ({
+      ...stop,
+      distanceToNext:
+        idx < stops.length - 1
+          ? calculateDistance(
+              stop.latitude,  stop.longitude,
+              stops[idx + 1].latitude, stops[idx + 1].longitude
+            ).toFixed(2)
+          : null,
+    }));
 
   // ── Edit-mode map helpers ─────────────────────────────────────────────────
 
@@ -4975,6 +4684,69 @@ const generateGeographicRoutes = (startStop, destinationStop, candidateStops, in
       ...route,
       hasSubRoutes: route.stops.length > 1 
     }));
+  };
+
+/**
+   * After a sub-route is saved, find every composite that contains it and
+   * recalculate their total_fare / total_distance as the sum of all their
+   * sub-routes' current totals.
+   *
+   * Why sum sub-route totals?
+   *   Route A: S1→S2 (fare 2) → S3 (last, fare null)  → total_fare = 2
+   *   Route B: S3→S4 (fare 4) → S5 (last, fare null)  → total_fare = 4
+   *   Composite total = 2 + 4 = 6  ✓
+   * (The junction stop S3 only contributes a fare from Route B's perspective,
+   *  so summing total_fares never double-counts.)
+   */
+  const syncCompositesForSubRoute = async (subRouteId) => {
+    // 1. Which composites use this sub-route?
+    const { data: memberships, error: memErr } = await supabase
+      .from('route_compositions')
+      .select('composite_route_id')
+      .eq('sub_route_id', subRouteId);
+
+    if (memErr || !memberships?.length) return;
+
+    const compositeIds = [...new Set(memberships.map(m => m.composite_route_id))];
+
+    for (const compositeId of compositeIds) {
+      // 2. Fetch every sub-route of this composite with its current totals
+      const { data: siblings, error: sibErr } = await supabase
+        .from('route_compositions')
+        .select(`
+          composition_order,
+          sub_routes:sub_route_id (
+            id,
+            total_fare,
+            total_distance
+          )
+        `)
+        .eq('composite_route_id', compositeId)
+        .order('composition_order');
+
+      if (sibErr || !siblings?.length) continue;
+
+      // 3. Sum across all sub-routes
+      const newTotalFare = siblings.reduce(
+        (sum, c) => sum + (parseFloat(c.sub_routes?.total_fare) || 0), 0
+      );
+      const newTotalDistance = siblings.reduce(
+        (sum, c) => sum + (parseFloat(c.sub_routes?.total_distance) || 0), 0
+      );
+
+      // 4. Push corrected totals back to the composite route row
+      const { error: updateErr } = await supabase
+        .from('routes')
+        .update({
+          total_fare:     newTotalFare,
+          total_distance: newTotalDistance,
+        })
+        .eq('id', compositeId);
+
+      if (updateErr) {
+        console.error(`Failed to sync composite route ${compositeId}:`, updateErr);
+      }
+    }
   };
 
 const handleUpdateRoute = async () => {
@@ -5118,6 +4890,10 @@ const handleUpdateRoute = async () => {
         .insert(routeStops);
       if (stopsError) throw stopsError;
 
+      // Recalculate total_fare / total_distance for any composite routes
+      // that include this sub-route, so they always reflect the latest values.
+      await syncCompositesForSubRoute(editingRoute.id);
+
       alert('Route updated successfully!');
       setEditingRoute(null);
       setEditPlottedStops([]);
@@ -5152,22 +4928,51 @@ const handleUpdateRoute = async () => {
 
 
   const handleDeleteRoute = async (routeId) => {
-    if (window.confirm('Are you sure you want to delete this route? This action cannot be undone.')) {
-      try {
-        const { error } = await supabase
-          .from('routes')
-          .delete()
-          .eq('id', routeId);
-
-        if (error) throw error;
-        
-        alert('Route deleted successfully!');
-        loadRoutes();
-      } catch (error) {
-        alert('Failed to delete route');
-      }
+    // Check if this route is used as a sub-route in any composite
+    const { data: usedIn, error: checkError } = await supabase
+      .from('route_compositions')
+      .select('composite_route_id')
+      .eq('sub_route_id', routeId);
+  
+    if (checkError) {
+      console.error('Delete route check error:', checkError);
+    }
+  
+    if (usedIn && usedIn.length > 0) {
+      const compositeIds = usedIn.map(r => r.composite_route_id);
+      const compositeNames = routes
+        .filter(r => compositeIds.includes(r.id))
+        .map(r => `"${r.name}"`)
+        .join(', ');
+  
+      alert(
+        `Cannot delete this route.\n\n` +
+        `It is used as a sub-route in the following composite routes:\n` +
+        `${compositeNames || compositeIds.join(', ')}\n\n` +
+        `Please remove it from those composites first, or delete the composites first.`
+      );
+      return;
+    }
+  
+    if (!window.confirm('Are you sure you want to delete this route? This action cannot be undone.')) {
+      return;
+    }
+  
+    try {
+      const { error } = await supabase
+        .from('routes')
+        .delete()
+        .eq('id', routeId);
+  
+      if (error) throw error;
+      alert('Route deleted successfully!');
+      loadRoutes();
+    } catch (error) {
+      console.error('Delete route error:', error);
+      alert('Failed to delete route: ' + error.message);
     }
   };
+
 
 
   const handleStopSuggestionSelect = (stopName, field, index) => {
@@ -5668,12 +5473,18 @@ const handleSaveSelectedRoutes = async () => {
       }
 
       // Add main route
+      const autoName = `${route.stops[0].name} to ${route.stops[route.stops.length - 1].name}`;
+      const chosenName = (routeNames[routeIndex] != null && routeNames[routeIndex].trim() !== '')
+        ? routeNames[routeIndex].trim()
+        : autoName;
+ 
       allRoutesToSave.push({
         route,
-        name: `${route.stops[0].name} to ${route.stops[route.stops.length - 1].name}`,
+        name: chosenName,
         type: 'main',
         routeKey: mainRouteKey
       });
+
 
       // Add reverse route if exists
       if (route.reverseRoute) {
@@ -5708,7 +5519,7 @@ const handleSaveSelectedRoutes = async () => {
     // Check for duplicates in database — by stop sequence (existing) AND by name
     const routesWithDuplicateInfo = await Promise.all(
       allRoutesToSave.map(async (routeData) => {
-        const sequenceDupe = await checkRouteExists(routeData.route.stops);
+        const sequenceDupe = await checkRouteExistsAndGetFares(routeData.route.stops);
 
         // Name-based check against already-loaded routes state
         const nameNorm = routeData.name.trim().toLowerCase();
@@ -5811,9 +5622,11 @@ const hasMoreRoutes = foundRoutes.length > ((currentPage + 1) * routesPerPage);
 const handleShowRouteSelection = (routes) => {
   setFoundRoutes(routes);
   setSelectedRoutes([]);
-  setCurrentPage(0); // Reset to first page
+  setCurrentPage(0);
+  setRouteNames({});
   setShowRouteSelection(true);
 };
+
 
 
   // NEW: Save route to database helper
@@ -5850,6 +5663,7 @@ const saveRouteToDatabase = async (route) => {
       name: routeName,
       total_distance,
       total_fare,
+      approved: true,
       description: newRoute.description || null,
       travel_time_minutes: newRoute.travelTimeMinutes ? parseInt(newRoute.travelTimeMinutes) : null,
       peak_hours: newRoute.peakHours || null,
@@ -5890,16 +5704,15 @@ const saveRouteToDatabase = async (route) => {
 };
 
 
-  const toggleBottomSheet = () => {
-    setShowBottomSheet(!showBottomSheet);
-    if (editingStop) {
-      setEditingStop(null);
-    }
-    if (editingRoute) {
-      setEditingRoute(null);
-    }
-    if (showRouteFinder) {
-      setShowRouteFinder(false);
+  const toggleBottomSheet = (forceState) => {
+    const nextState = forceState !== undefined ? forceState : !showBottomSheet;
+    setShowBottomSheet(nextState);
+    // Only clear editing state when the sheet is being closed (not when forcing it open)
+    if (!nextState) {
+      if (editingRoute) setEditingRoute(null);
+      if (showRouteFinder) setShowRouteFinder(false);
+      // NOTE: do NOT clear editingStop here — handleEditStop closes the sheet
+      // so the user can pick a location, and editingStop must survive that.
     }
   };
 
@@ -6022,8 +5835,8 @@ return (
             <div className="user-info-header">
               <div className="user-welcome">
                 Welcome, <span className="user-email">{user?.email}</span>
-            </div>
-            <button className="close-button" onClick={toggleBottomSheet}>
+              </div>
+              <button className="close-button" onClick={() => toggleBottomSheet(false)}>
                 <X size={30} />
               </button>
               <div className="tab-container">
@@ -6178,7 +5991,10 @@ return (
                     
                     <button 
                       className="location-button"
-                      onClick={() => setIsSelectingLocation(true)}
+                      onClick={() => {
+                        setIsSelectingLocation(true);
+                        setShowBottomSheet(false);
+                      }}
                     >
                       <MapPin size={20} />
                       Update Location on Map
@@ -6373,6 +6189,7 @@ return (
                     onCancel={() => {
                       setRouteCreationMode(null);
                       setPlottedStops([]);
+                      userEditedRouteName.current = false;
                     }}
                     onSave={handleSavePlottedRoute}
                     isLoading={isLoading}
@@ -6384,7 +6201,10 @@ return (
                     onAddFare={handleAddFare}
                     fares={plottedStops.map(stop => stop.fareToNext)}
                     routeName={newRoute.name}
-                    onRouteNameChange={(text) => setNewRoute(prev => ({ ...prev, name: text }))}
+                    onRouteNameChange={(text) => {
+                      userEditedRouteName.current = true; // user is typing manually
+                      setNewRoute(prev => ({ ...prev, name: text }));
+                    }}
                     onSelectExistingStop={() => setRouteCreationMode('selecting')}
                     isSelectingExisting={routeCreationMode === 'selecting'}
                     showRoutePaths={showRoutePaths}
@@ -6433,20 +6253,24 @@ return (
                         };
                       });
                     }}
-                  onAddStopFromSearch={(stop) => {
+                    onAddStopFromSearch={(stop) => {
                     const isAlreadyAdded = plottedStops.some(s => !s.isNew && s.id === stop.id);
                     if (!isAlreadyAdded) {
-                      setPlottedStops(prev => [...prev, {
-                        ...stop,
-                        isNew: false,
-                        distanceToNext: calculateDistanceToNext(prev, stop)
-                      }]);
+                      // Recalc all distances in one pass — no double-counting
+                      const updated = recalcPlottedDistances([
+                        ...plottedStops,
+                        { ...stop, isNew: false, fareToNext: '', distanceToNext: null },
+                      ]);
+                      setPlottedStops(updated);
                       setSearchQuery('');
                       setSearchResults([]);
                     } else {
                       alert(`"${stop.name}" is already in the route`);
                     }
                   }}
+                  searchQuery={searchQuery}
+                  onSearchChange={(query) => setSearchQuery(query)}
+                  searchResults={searchResults}
                   />
                 ) : editingRoute ? (
                   <RouteEditWithMap
@@ -6516,6 +6340,12 @@ return (
                       })
                     }
                   />
+                ) : showCompositeForm ? (
+                  <CompositeRouteForm
+                    onCancel={() => setShowCompositeForm(false)}
+                    onSave={handleSaveCompositeRoute}
+                    isLoading={isLoading}
+                  />
                 ) : showEnhancedRouteFinder ? (
                   <EnhancedRouteFinder
                     startPoints={startPoints}
@@ -6528,6 +6358,7 @@ return (
                     onRemoveDestinationPoint={handleRemoveDestinationPoint}
                     onFindRoutes={findEnhancedRoutesBetweenStops}
                     onFindAutomaticRoutes={discoverAutomaticRoutes}
+                    onFindCompositeOnlyRoutes={findCompositeOnlyRoutes}
                     onCancel={() => {
                       setShowEnhancedRouteFinder(false);
                       setStartPoints(['']);
@@ -6585,8 +6416,22 @@ return (
                           <p>Generate routes between start and destination points.</p>
                         </div>
                       </button>
-                    </div>
+                      
+                      <button
+                        className="creation-option-button"
+                        style={{ background: 'linear-gradient(135deg, #ffffff, #b9b6fa50)' }}
+                        onClick={() => setShowCompositeForm(true)}
+                        title="Create a route by combining existing routes"
+                      >
+                        <Layers size={20} />
+                        <div className="option-content">
+                          <h4>Composite Route</h4>
+                          <p>Merge multiple existing routes into one composite route.</p>
+                        </div>
+                      </button>
 
+                    </div>
+                    
                     <p className="divider-text">OR</p>
                     
                     <RouteForm
@@ -6663,6 +6508,7 @@ return (
                   </div>
                 )}
 
+
                 {!routeCreationMode && !editingRoute && !showEnhancedRouteFinder && (
                   <div className="routes-list">
                     <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', flexWrap:'wrap', gap:'4px', marginBottom:'6px' }}>
@@ -6707,7 +6553,7 @@ return (
                               if (mid) setPanToLocation(mid);
                             }}
                             onMouseLeave={() => setHoveredRouteId(null)}
-                            onClick={() => {
+                            onClick={async () => {
                               const toggling = selectedRouteId === route.id;
                               setSelectedRouteId(toggling ? null : route.id);
                               const mid = getRouteMidpoint(route);
@@ -6725,12 +6571,81 @@ return (
                                 setSpotlightRoute(null);
                                 setSpotlightStop(null);
                               }
+
+                              // ── Lazy-load route stops if not yet fetched ──────────────
+                              // route_stops may be missing or stops nested data absent
+                              if (!toggling) {
+                                const hasStopData = (route.route_stops || []).some(
+                                  rs => rs.stops && rs.stops.latitude != null
+                                );
+                                if (!hasStopData) {
+                                  try {
+                                    const { data: freshRoute } = await supabase
+                                      .from('routes')
+                                      .select(`
+                                        id,
+                                        route_stops (
+                                          stop_order,
+                                          fare_to_next,
+                                          distance_to_next,
+                                          stops (*)
+                                        )
+                                      `)
+                                      .eq('id', route.id)
+                                      .single();
+
+                                    if (freshRoute) {
+                                      // Merge fetched route_stops into the route object
+                                      // so the map can render markers and path correctly
+                                      const patchRoute = r => r.id === route.id
+                                        ? { ...r, route_stops: freshRoute.route_stops }
+                                        : r;
+                                      setRoutes(prev => prev.map(patchRoute));
+                                      setFilteredRoutes(prev => prev.map(patchRoute));
+                                      if (spotlightRoute?.id === route.id) {
+                                        setSpotlightRoute(prev => ({ ...prev, route_stops: freshRoute.route_stops }));
+                                      }
+                                      // Ensure all stop objects exist in the stops array
+                                      // so the MapComponent can render their markers
+                                      const fetchedStops = (freshRoute.route_stops || [])
+                                        .map(rs => rs.stops)
+                                        .filter(Boolean);
+                                      setStops(prev => {
+                                        const ids = new Set(prev.map(s => s.id));
+                                        const toAdd = fetchedStops.filter(s => !ids.has(s.id));
+                                        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+                                      });
+                                    }
+                                  } catch (err) {
+                                    console.warn('Could not lazy-load route stops:', err);
+                                  }
+                                }
+                              }
+                              // ─────────────────────────────────────────────────────────
                             }}
                             style={{ cursor: 'pointer', userSelect: 'none' }}
                           >
                             <div className="item-info">
                               <h4 className="item-name">{route.name}</h4>
-                    
+                              {route.is_composite && (
+                                <span
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                    fontSize: '10px', fontWeight: 700,
+                                    background: 'linear-gradient(135deg, #ede9fe, #ddd6fe)',
+                                    color: '#5b21b6',
+                                    border: '1px solid #c4b5fd',
+                                    borderRadius: '4px',
+                                    padding: '1px 6px',
+                                    marginLeft: '6px',
+                                    verticalAlign: 'middle',
+                                  }}
+                                >
+                                  <Layers size={10} />
+                                  Composite
+                                </span>
+                              )}
+
                               {route.description && (
                                 <p className="item-description">{route.description}</p>
                               )}
@@ -6850,8 +6765,7 @@ return (
                     
                               {/* Stop sequence */}
                               <div className="route-highlight-stops-path">
-                                {route.route_stops
-                                  ?.slice()
+                                {route.route_stops?.slice()
                                   .sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0))
                                   .map((rs, idx, arr) => (
                                     <span key={rs.stop_id || idx}>
@@ -6868,6 +6782,54 @@ return (
                                   ))
                                 }
                               </div>
+
+                              {route.is_composite && route.route_compositions && route.route_compositions.length > 0 && (
+                                <div style={{ marginTop: '10px' }}>
+                                  <div style={{
+                                    fontSize: '11px', fontWeight: 600, color: '#9ca3af',
+                                    marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em',
+                                  }}>
+                                    Built from sub-routes
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    {route.route_compositions
+                                      .slice()
+                                      .sort((a, b) => a.composition_order - b.composition_order)
+                                      .map((comp, i) => {
+                                        const subRoute = routes.find(r => r.id === comp.sub_route_id);
+                                        return (
+                                          <div key={comp.sub_route_id} style={{
+                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                            fontSize: '12px', color: '#374151',
+                                          }}>
+                                            <span style={{
+                                              width: '18px', height: '18px',
+                                              background: '#7c3aed', borderRadius: '50%',
+                                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                              color: '#fff', fontSize: '9px', fontWeight: 700, flexShrink: 0,
+                                            }}>
+                                              {i + 1}
+                                            </span>
+                                            <Route size={11} color="#6b21a8" />
+                                            <span>{subRoute?.name ?? comp.sub_route_id}</span>
+                                            {subRoute && (
+                                              <span style={{ color: '#9ca3af', fontSize: '11px' }}>
+                                                GH₵ {subRoute.total_fare}
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })
+                                    }
+                                  </div>
+                                  <div style={{
+                                    fontSize: '11px', color: '#6b21a8', marginTop: '8px',
+                                    fontStyle: 'italic',
+                                  }}>
+                                    ↺ Auto-updates when any sub-route changes
+                                  </div>
+                                </div>
+                              )}
                     
                               {/* Amenities */}
                               {route.amenities?.length > 0 && (
@@ -6988,9 +6950,10 @@ return (
         onLoadMore={handleLoadMoreRoutes}
         hasMoreRoutes={hasMoreRoutes}
         onRoutesPerPageChange={handleRoutesPerPageChange}
-        currentSearchKey={currentSearchKey}
-        routeCache={routeCache}
+        routeNames={routeNames}
+        onRouteNameChange={handleRouteNameChange}
       />
+
 
       {isSelectingLocation && (
         <div className="overlay">
