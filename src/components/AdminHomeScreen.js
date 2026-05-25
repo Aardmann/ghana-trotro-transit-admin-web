@@ -329,8 +329,8 @@ const AuthForm = ({
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h1 className="auth-title">Trotro Admin</h1>
-        <p className="auth-subtitle">Ghana Trotro Transit Administration</p>
+        <h1 className="auth-title">GTT Admin</h1>
+        <p className="auth-subtitle">Add, Update and Delete Routes and Stops</p>
         
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="input-group">
@@ -364,13 +364,13 @@ const AuthForm = ({
           </button>
 
           <button 
-  type="button"
-  onClick={onForgotPassword}
-  disabled={isLoading}
-  className="forgot-password-button"
->
-  {isLoading ? 'Sending...' : 'Forgot Password?'}
-</button>
+            type="button"
+            onClick={onForgotPassword}
+            disabled={isLoading}
+            className="forgot-password-button"
+          >
+            Forgot Password?
+          </button>
         </form>
       </div>
     </div>
@@ -1080,7 +1080,6 @@ const handleSearchLocation = async (query) => {
 
   setIsSearchingLocation(true);
   try {
-    // Search using Nominatim (OpenStreetMap)
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=gh`
     );
@@ -2698,7 +2697,7 @@ const handleAdminLogin = async () => {
     }
   } catch (error) {
     console.error('Login error:', error);
-    alert(error.message || 'Login failed');
+    alert( 'Login failed.' || error.message );
   } finally {
     setIsLoading(false);
   }
