@@ -181,7 +181,7 @@ const AuthForm = ({
     <div className="auth-container">
       <div className="auth-card">
         <h1 className="auth-title">GTT Earner Portal</h1>
-        <p className="auth-subtitle">Add stops &amp; routes to earn rewards</p>
+        <p className="auth-subtitle">Add stops &amp; routes to earn moneyyy</p>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="input-group">
             <input className="auth-input" type="text" placeholder="Earner ID (e.g. GTT-EARN3R1ID)"
