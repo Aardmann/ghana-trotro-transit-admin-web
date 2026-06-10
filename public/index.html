@@ -26,6 +26,14 @@
         document.title = 'Ghana Trotro Transit - Earner';
       }
     </script>
+    <!--
+    Check if user is using a mobile device a show an alert
+    -->
+    <script>
+      if (/Mobi|Android/i.test(navigator.userAgent)) {
+        alert(`For the best experience, please use this application on a desktop or laptop computer so you can work faster. \n\nThis application is not optimized for mobile devices. \n\nSome iPhone devices below iOS 26 do not show the full interface, which may cause confusion. \n\n`);
+      }
+    </script>
   </head>
   <body>
     <noscript>Manage stops and routes</noscript>

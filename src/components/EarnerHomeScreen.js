@@ -618,67 +618,68 @@ const EarnerHomeScreen = () => {
   // AUTH
   // ─────────────────────────────────────────────────────────────────────────
   const handleEarnerLogin = async () => {
-    if (!earnerId.trim() || !authEmail.trim() || !authPassword.trim()) {
-      alert('Please enter your Earner ID, email, and password.');
-      return;
+  if (!earnerId.trim() || !authEmail.trim() || !authPassword.trim()) {
+    alert('Please enter your Earner ID, email, and password.');
+    return;
+  }
+  setIsLoading(true);
+  try {
+    // 1. Authenticate with Supabase Auth first
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: authEmail.trim(),
+      password: authPassword,
+    });
+    if (authError) throw authError;
+
+    // 2. Now that we have a valid session, look up the earner by ID
+    const { data: earnerRow, error: earnerError } = await supabase
+      .from('earners')
+      .select('*')
+      .ilike('earner_id', earnerId.trim())
+      .single();
+
+    // 3. If earner doesn't exist OR email doesn't match, sign out immediately
+    if (earnerError || !earnerRow) {
+      await supabase.auth.signOut();
+      throw new Error('Earner ID not found. Please check your ID and try again.');
     }
-    setIsLoading(true);
-    try {
-      // 1. Sign in via Supabase Auth first — this establishes the session
-      //    so that subsequent queries run with the user's RLS context.
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: authEmail.trim(),
-        password: authPassword,
-      });
-      if (authError) throw authError;
 
-      // 2. Now that we're authenticated, query the earners table.
-      //    RLS will allow this because the user session is active.
-      const { data: earnerRow, error: earnerError } = await supabase
-        .from('earners')
-        .select('*')
-        .ilike('earner_id', earnerId.trim())   // case-insensitive match
-        .single();
-
-      if (earnerError || !earnerRow) {
-        // Sign back out — wrong earner ID for this account
-        await supabase.auth.signOut();
-        throw new Error('Earner ID not found. Please check your ID and try again.');
-      }
-
-      // 3. Confirm the earner record belongs to the signed-in email
-      if (earnerRow.email.toLowerCase() !== authEmail.trim().toLowerCase()) {
-        await supabase.auth.signOut();
-        throw new Error('The email address does not match this Earner ID.');
-      }
-
-      // 4. All checks passed — store session
-      setUser(authData.user);
-      setEarner(earnerRow);
-      setShowAuth(false);
-      localStorage.setItem('earnerUser', JSON.stringify(authData.user));
-      localStorage.setItem('earnerData', JSON.stringify(earnerRow));
-      loadStops(0, authData.user, earnerRow);
-      loadRoutes(0, authData.user, earnerRow);
-      // Fetch fresh earner row so DB-computed counters are shown immediately
-      supabase
-        .from('earners')
-        .select('*')
-        .eq('earner_id', earnerRow.earner_id)
-        .single()
-        .then(({ data }) => {
-          if (data) {
-            setEarner(data);
-            localStorage.setItem('earnerData', JSON.stringify(data));
-          }
-        })
-        .catch(() => {});
-    } catch (err) {
-      alert(err.message || 'Login failed. Please try again.');
-    } finally {
-      setIsLoading(false);
+    if (earnerRow.email.toLowerCase() !== authEmail.trim().toLowerCase()) {
+      await supabase.auth.signOut();
+      throw new Error('The email address does not match this Earner ID.');
     }
-  };
+
+    // 4. All checks passed – store session and earner data
+    setUser(authData.user);
+    setEarner(earnerRow);
+    setShowAuth(false);
+    localStorage.setItem('earnerUser', JSON.stringify(authData.user));
+    localStorage.setItem('earnerData', JSON.stringify(earnerRow));
+
+    // 5. Load stops, routes, and refresh earner counters
+    await loadStops(0, authData.user, earnerRow);
+    await loadRoutes(0, authData.user, earnerRow);
+    const { data: refreshedEarner } = await supabase
+      .from('earners')
+      .select('*')
+      .eq('earner_id', earnerRow.earner_id)
+      .single();
+    if (refreshedEarner) {
+      setEarner(refreshedEarner);
+      localStorage.setItem('earnerData', JSON.stringify(refreshedEarner));
+    }
+  } catch (err) {
+    alert(err.message || 'Login failed. Please try again.');
+    // Extra safety: ensure any lingering session is cleared
+    await supabase.auth.signOut();
+    setUser(null);
+    setEarner(null);
+    localStorage.removeItem('earnerUser');
+    localStorage.removeItem('earnerData');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleForgotPassword = async () => {
     if (!authEmail.trim()) { alert('Please enter your email address first.'); return; }
