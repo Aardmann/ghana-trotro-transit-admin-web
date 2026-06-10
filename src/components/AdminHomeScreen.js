@@ -40,6 +40,7 @@ import RouteEditWithMap from './RouteEditWithMap';
 import StopForm from './StopForm';
 import './StopForm.css';
 import CompositeRouteForm from './CompositeRouteForm';
+import AICompositeRouteBuilder from './AICompositeRouteBuilder';
 import EnhancedRouteFinder  from './EnhancedRouteFinder';
 import RouteSelectionModal from './RouteSelectionModal';
 import { GHANA_REGIONS, filterStopsByRegion } from './ghanaRegions';
@@ -805,7 +806,7 @@ const AdminHomeScreen = () => {
   // Bottom sheet state
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [activeSection, setActiveSection] = useState('stops');
-  const [sheetWidth, setSheetWidth] = useState(500);
+  const [sheetWidth, setSheetWidth] = useState(620);
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -937,6 +938,7 @@ const AdminHomeScreen = () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const [showCompositeForm, setShowCompositeForm] = useState(false);
+  const [showAICompositeForm, setShowAICompositeForm] = useState(false);
   
   const [routeNames, setRouteNames] = useState({});
  
@@ -6345,6 +6347,16 @@ return (
                     onSave={handleSaveCompositeRoute}
                     isLoading={isLoading}
                   />
+                ) : showAICompositeForm ? (
+                  <AICompositeRouteBuilder
+                    onCancel={() => setShowAICompositeForm(false)}
+                    onSave={(payload) => {
+                      setShowAICompositeForm(false);
+                      handleSaveCompositeRoute(payload);
+                    }}
+                    isLoading={isLoading}
+                    availableRoutes={routes.filter(r => !r.is_composite && r.approved)}
+                  />
                 ) : showEnhancedRouteFinder ? (
                   <EnhancedRouteFinder
                     startPoints={startPoints}
@@ -6426,6 +6438,19 @@ return (
                         <div className="option-content">
                           <h4>Composite Route</h4>
                           <p>Merge multiple existing routes into one composite route.</p>
+                        </div>
+                      </button>
+
+                      <button
+                        className="creation-option-button"
+                        style={{ background: 'linear-gradient(135deg, #f5f3ff, #ddd6fe60)' }}
+                        onClick={() => setShowAICompositeForm(true)}
+                        title="Use AI to automatically pick and chain sub-routes"
+                      >
+                        <Layers size={20} />
+                        <div className="option-content">
+                          <h4>AI Composite Route</h4>
+                          <p>Describe your journey — AI picks and chains the right sub-routes automatically.</p>
                         </div>
                       </button>
 
