@@ -5,21 +5,16 @@ import EarnerHomeScreen from './components/EarnerHomeScreen';
 import './App.css';
 
 function App() {
-  const path = window.location.pathname;
+  //const path = window.location.pathname;
 
-  if (path === '/EarnerHomeScreen' || path === '/earner') {
-    return (
-      <div className="App">
-        <EarnerHomeScreen />
-      </div>
-    );
+  const hash = window.location.hash;
+
+  if (hash === '#/earner') {
+    return <EarnerHomeScreen />;
   }
 
-  return (
-    <div className="App">
-      <AdminHomeScreen />
-    </div>
-  );
+  return <AdminHomeScreen />;
+
 }
 
 export default App;
