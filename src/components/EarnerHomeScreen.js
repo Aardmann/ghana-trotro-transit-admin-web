@@ -184,7 +184,7 @@ const AuthForm = ({
         <p className="auth-subtitle">Add stops &amp; routes to earn rewards</p>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="input-group">
-            <input className="auth-input" type="text" placeholder="Earner ID (e.g. GTT-00123)"
+            <input className="auth-input" type="text" placeholder="Earner ID (e.g. GTT-EARN3R1ID)"
               value={earnerId} onChange={(e) => onEarnerIdChange(e.target.value)} required />
           </div>
           <div className="input-group">
