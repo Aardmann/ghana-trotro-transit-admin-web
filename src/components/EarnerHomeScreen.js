@@ -37,6 +37,7 @@ import {
   Phone,
   DollarSign,
   XCircle,
+  Edit,
 } from 'lucide-react';
 import RouteCreationWithMap from './RouteCreationWithMap';
 import RouteEditWithMap from './RouteEditWithMap';
@@ -181,7 +182,7 @@ const AuthForm = ({
     <div className="auth-container">
       <div className="auth-card">
         <h1 className="auth-title">GTT Earner Portal</h1>
-        <p className="auth-subtitle">Add stops &amp; routes to earn moneyyy</p>
+        <p className="auth-subtitle">Add stops &amp; routes to earn moneyyy!</p>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="input-group">
             <input className="auth-input" type="text" placeholder="Earner ID (e.g. GTT-EARN3R1ID)"
@@ -306,6 +307,7 @@ const EarnerHomeScreen = () => {
   const [isLoading,    setIsLoading]    = useState(false);
   const [showPhoneEdit, setShowPhoneEdit] = useState(false);
   const [phoneValue,    setPhoneValue]    = useState('');
+  const [fullNameValue,  setFullNameValue]  = useState('');
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -710,23 +712,24 @@ const EarnerHomeScreen = () => {
       }
     } catch { /* non-critical */ }
   };
-
-  const handleUpdatePhone = async () => {
+    
+  const handleUpdateMomoDetails = async () => {
+    if (!fullNameValue.trim()) { alert('Please enter the full name associated with your MoMo account.'); return; }
     if (!phoneValue.trim()) { alert('Please enter a phone number.'); return; }
     setIsSavingPhone(true);
     try {
       const { error } = await supabase
         .from('earners')
-        .update({ phone: phoneValue.trim() })
+        .update({ full_name: fullNameValue.trim(), phone: phoneValue.trim() })
         .eq('earner_id', earner.earner_id);
       if (error) throw error;
-      const updated = { ...earner, phone: phoneValue.trim() };
+      const updated = { ...earner, full_name: fullNameValue.trim(), phone: phoneValue.trim() };
       setEarner(updated);
       localStorage.setItem('earnerData', JSON.stringify(updated));
       setShowPhoneEdit(false);
-      alert('Phone number updated successfully!');
+      alert('MoMo details updated successfully!');
     } catch (err) {
-      alert('Failed to update phone: ' + err.message);
+      alert('Failed to update MoMo details: ' + err.message);
     } finally {
       setIsSavingPhone(false);
     }
@@ -1483,11 +1486,12 @@ const EarnerHomeScreen = () => {
           className="menu-button"
           title="Edit phone number"
           onClick={() => {
+            setFullNameValue(earner?.full_name || '');
             setPhoneValue(earner?.phone || '');
             setShowPhoneEdit(p => !p);
           }}
         >
-          <Phone size={20} />
+          <Edit size={20} />
         </button>
         <button className="menu-button" onClick={toggleBottomSheet} title="Toggle panel">
           <Settings size={20} />
@@ -1503,13 +1507,22 @@ const EarnerHomeScreen = () => {
         }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
             <span style={{ fontWeight:700, fontSize:13, color:'#1f2937', display:'flex', alignItems:'center', gap:6 }}>
-              <Phone size={14} color="#7c3aed" /> Edit Phone Number
+              <Edit size={14} color="#7c3aed" /> Edit MoMo Details
             </span>
             <button onClick={() => setShowPhoneEdit(false)}
               style={{ background:'none', border:'none', cursor:'pointer', padding:2, color:'#6b7280' }}>
               <X size={16} />
             </button>
           </div>
+          <input
+            className="input"
+            type="name"
+            placeholder="Nana Nketia"
+            value={fullNameValue}
+            onChange={(e) => setFullNameValue(e.target.value)}
+            style={{ marginBottom:10, fontSize:13 }}
+            autoFocus
+          />
           <input
             className="input"
             type="tel"
@@ -1527,7 +1540,7 @@ const EarnerHomeScreen = () => {
             <button
               className={`save-button ${isSavingPhone ? 'save-button-disabled' : ''}`}
               style={{ flex:1, fontSize:12 }}
-              onClick={handleUpdatePhone}
+              onClick={handleUpdateMomoDetails}
               disabled={isSavingPhone}
             >
               {isSavingPhone ? <div className="spinner" style={{width:14,height:14}} /> : 'Save'}
@@ -1558,7 +1571,6 @@ const EarnerHomeScreen = () => {
               {earner && (
                 <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginTop:6, marginBottom:2 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:5, background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'4px 10px' }}>
-                    <DollarSign size={13} color="#16a34a" />
                     <span style={{ fontSize:12, fontWeight:700, color:'#15803d' }}>GH₵ {Number(earner.earnings || 0).toFixed(2)}</span>
                     <span style={{ fontSize:11, color:'#6b7280' }}>earnings</span>
                   </div>
@@ -1584,7 +1596,7 @@ const EarnerHomeScreen = () => {
                 </button>
                 <button className={`tab ${activeSection === 'routes' ? 'active-tab' : ''}`}
                   onClick={() => setActiveSection('routes')}>
-                  <Route size={16} /> My Routes
+                  <Route size={16} /> Routes
                 </button>
               </div>
             </div>
@@ -1642,7 +1654,7 @@ const EarnerHomeScreen = () => {
                 <div className="stops-list">
                   <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', flexWrap:'wrap', gap:4, marginBottom:6 }}>
                     <h3 className="list-title" style={{ margin:0 }}>
-                      All Stops
+                      My Stops
                       <span style={{ fontWeight:400, fontSize:13, color:'#6b7280', marginLeft:4 }}>({totalStopsCount} total)</span>
                     </h3>
                     {!stopSearchQuery.trim() && totalStopsCount > 0 && (

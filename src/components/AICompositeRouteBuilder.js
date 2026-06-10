@@ -763,37 +763,6 @@ const AICompositeRouteBuilder = ({
             })}
           </div>
 
-          {/* Info banner */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "8px",
-              background: "#ede9fe",
-              border: "1px solid #c4b5fd",
-              borderRadius: "8px",
-              padding: "10px 14px",
-              marginBottom: "14px",
-            }}
-          >
-            <Info
-              size={15}
-              color="#6b21a8"
-              style={{ flexShrink: 0, marginTop: "1px" }}
-            />
-            <span
-              style={{
-                fontSize: "12px",
-                color: "#5b21b6",
-                lineHeight: "1.5",
-              }}
-            >
-              This preview reflects the <strong>current</strong> fares and
-              distances of each sub-route. The composite route will{" "}
-              <strong>auto-update</strong> via a database trigger if any
-              sub-route is edited later.
-            </span>
-          </div>
         </>
       )}
 

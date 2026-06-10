@@ -7,20 +7,6 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-/* ─────────────────────────────────────────────────────────
-   StopForm
-   Props (all existing ones kept + 2 new):
-     onPreviewExcelStop  (stop | null) => void
-       Called when user clicks a row in the Excel table.
-       Pass the stop to preview as a temp map marker,
-       or null to clear the preview.
-
-     onRequestMapPick    (callback: (lat, lng) => void) => void
-       Called when user hits "Pick on Map" inside a row editor.
-       Parent should set isSelectingLocation=true, close the
-       sheet, and when the map is clicked call callback(lat,lng)
-       then re-open the sheet.
-───────────────────────────────────────────────────────── */
 const StopForm = ({
   newStop,
   onStopNameChange,
@@ -232,6 +218,7 @@ const StopForm = ({
 
   const hasCoords  = !!(newStop.latitude && newStop.longitude);
   const singleValid = newStop.name && hasCoords;
+  const hash = window.location.hash;
 
   /* ════════════════════════════════════════
      RENDER
@@ -248,11 +235,16 @@ const StopForm = ({
         </div>
       </div>
 
-      <button className="sf-autofinder-btn" onClick={onOpenAutoFinder}>
-        <Search size={16} /> Find Stops Automatically
-      </button>
+      {/* If hash == '/earner', hide autofinder and excel import options */}
+      {hash !== '#/earner' && (
+        <>
+          <button className="sf-autofinder-btn" onClick={onOpenAutoFinder}>
+            <Search size={16} /> Find Stops Automatically
+          </button>
 
-      <div className="sf-divider"><span>or add stops below</span></div>
+          <div className="sf-divider"><span>or add stops below</span></div>
+        </>
+      )}
 
       {/* ── Mode tabs ── */}
       <div className="sf-mode-tabs">

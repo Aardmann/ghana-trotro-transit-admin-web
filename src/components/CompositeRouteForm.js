@@ -323,9 +323,8 @@ const CompositeRouteForm = ({ onCancel, onSave, isLoading }) => {
         <Layers size={22} color="#6b21a8" />
         <h1 className="form-title" style={{ margin: 0 }}>Create Composite Route</h1>
       </div>
-      <p className="form-subtitle" style={{ marginBottom: '20px' }}>
-        Chain existing routes together. Any future fare, stop, or distance changes
-        to a sub-route will <strong>automatically update</strong> this composite route.
+      <p className="form-subtitle" style={{ marginBottom: '20px', marginLeft: '-130px' }}>
+        Chain existing routes together to create a complete route.
       </p>
 
 
@@ -511,21 +510,6 @@ const CompositeRouteForm = ({ onCancel, onSave, isLoading }) => {
               {totalDistance} km &nbsp;•&nbsp; GH₵ {totalFare}
             </span>
           </h3>
-
-          {/* "Changes auto-sync" info banner */}
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: '8px',
-            background: '#ede9fe', border: '1px solid #c4b5fd',
-            borderRadius: '8px', padding: '10px 14px', marginBottom: '14px',
-          }}>
-            <Info size={15} color="#6b21a8" style={{ flexShrink: 0, marginTop: '1px' }} />
-            <span style={{ fontSize: '12px', color: '#5b21b6', lineHeight: '1.5' }}>
-              This preview reflects the <strong>current</strong> fares and distances of
-              each sub-route. If a sub-route is edited later, the composite route will
-              update <strong>automatically</strong> via a database trigger — no manual
-              action needed.
-            </span>
-          </div>
 
           <div style={{
             background: '#f9fafb',
